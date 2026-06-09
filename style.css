@@ -1,5 +1,5 @@
 /* ============================================================
-   RISC-NPU Article — style matching neural-biome
+   RISC-NPU Article style matching neural-biome
    ============================================================ */
 
 :root {
@@ -55,7 +55,7 @@ h1 {
   font-size: clamp(38px, 5.2vw, 68px);
   font-weight: 400;
   line-height: 0.98;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: #222;
   margin-bottom: 28px;
 }
@@ -272,6 +272,7 @@ article a:hover { text-decoration: underline; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
   padding: 5px 14px;
+  min-width: 84px;
   border: 1px solid var(--line);
   background: #fff;
   color: #333;

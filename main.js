@@ -1,518 +1,596 @@
 'use strict';
 
-/* ============================================================
-   RISC-NPU Article — Interactive Visuals
-   Visual 1: ROM Grid Race
-   Visual 2: State Ribbon
-   Visual 3: Scaling Chart
-   ============================================================ */
+/*
+   RISC-NPU article visuals
+   Visual 1: software loop vs MAC instruction latency
+   Visual 2: control-state ribbon
+   Visual 3: scaling chart
+*/
 
-const HW_COLOR   = '#c47d0e';
-const SW_COLOR   = '#1d63b7';
-const FETCH_C    = '#6b8cba';
-const DECODE_C   = '#5b9e6b';
-const EXEC_C     = '#e07b3a';
-const WAIT_C     = '#c47d0e';
-const ADD_C      = '#bbbbbb';
-const BOOK_C     = '#6b8cba';
-const DONE_C     = '#4caf88';
-const BG_C       = '#f7f7f7';
-const LINE_C     = '#d6d6d6';
+const HW_COLOR = '#c47d0e';
+const SW_COLOR = '#1d63b7';
+const FETCH_C = '#6b8cba';
+const DECODE_C = '#5b9e6b';
+const EXEC_C = '#e07b3a';
+const WAIT_C = '#c47d0e';
+const ADD_C = '#bbbbbb';
+const BOOK_C = '#6b8cba';
+const DONE_C = '#4caf88';
+const SETUP_C = '#d0d0d0';
+const LINE_C = '#d6d6d6';
 
-/* ── DPI helpers ── */
-function dpi(canvas) {
-  const r = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  if (canvas.width !== w * r || canvas.height !== h * r) {
-    canvas.width  = w * r;
-    canvas.height = h * r;
-    canvas.getContext('2d').scale(r, r);
+function prepareCanvas(canvas) {
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.floor(canvas.clientWidth || Number(canvas.getAttribute('width')) || 600));
+  const height = Math.max(1, Math.floor(canvas.clientHeight || Number(canvas.getAttribute('height')) || 220));
+  const backingWidth = Math.round(width * ratio);
+  const backingHeight = Math.round(height * ratio);
+
+  if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
   }
-  return { w, h, r };
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  return { ctx, width, height };
 }
 
-/* ══════════════════════════════════════════════════════════════
-   VISUAL 1 — ROM GRID RACE
-   SW program: LDIA, LDIB, ADD×50, STA, LDIA, LDIB, MAC, STA = 56 words
-   HW program: LDIA, LDIB, STA, LDIA, LDIB, MAC, STA           =  7 words
-   ══════════════════════════════════════════════════════════════ */
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
-const ROM_SW = [];  // 56 instructions
-ROM_SW.push({ type: 'book', label: 'LDIA 0' });
-ROM_SW.push({ type: 'book', label: 'LDIB 50' });
-for (let i = 0; i < 50; i++) ROM_SW.push({ type: 'add', label: 'ADD' });
-ROM_SW.push({ type: 'book', label: 'STA 0' });
-ROM_SW.push({ type: 'book', label: 'LDIA 50' });
-ROM_SW.push({ type: 'book', label: 'LDIB 50' });
-ROM_SW.push({ type: 'mac', label: 'MAC' });
-ROM_SW.push({ type: 'book', label: 'STA 1' });
+function sumDurations(program) {
+  return program.reduce((sum, item) => sum + item.dur, 0);
+}
 
-const ROM_HW = [];
-ROM_HW.push({ type: 'book', label: 'LDIA 0' });
-ROM_HW.push({ type: 'book', label: 'LDIB 50' });
-ROM_HW.push({ type: 'book', label: 'STA 0' });
-ROM_HW.push({ type: 'book', label: 'LDIA 50' });
-ROM_HW.push({ type: 'book', label: 'LDIB 50' });
-ROM_HW.push({ type: 'mac', label: 'MAC' });
-ROM_HW.push({ type: 'book', label: 'STA 1' });
+function cycleToIndex(program, cycle) {
+  let elapsed = 0;
+  for (let i = 0; i < program.length; i += 1) {
+    elapsed += program[i].dur;
+    if (cycle < elapsed) return i;
+  }
+  return program.length;
+}
+
+function buttonText(id, text) {
+  const button = document.getElementById(id);
+  if (button) button.textContent = text;
+}
+
+/* Visual 1: execution trace */
+
+const ROM_SW = [
+  { type: 'setup', label: 'RST', dur: 1 },
+  { type: 'book', label: 'LDIA 0', dur: 3 },
+  { type: 'book', label: 'LDIB 50', dur: 3 },
+];
+
+for (let i = 0; i < 50; i += 1) {
+  ROM_SW.push({ type: 'add', label: 'ADD', dur: 3 });
+}
+
+ROM_SW.push({ type: 'book', label: 'STA 0', dur: 3 });
+
+const ROM_HW = [
+  { type: 'mac', label: 'MAC', dur: 13 },
+];
+
+const SW_TOTAL = sumDurations(ROM_SW);
+const HW_TOTAL = sumDurations(ROM_HW);
 
 let raceRunning = false;
-let raceCycle   = 0;   // 0..160 (each ADD = 3 cycles, bookkeeping = 3 each)
-let raceRaf     = null;
+let raceCycle = 0;
+let raceRaf = null;
 
-// map cycle → instruction index for SW (each instr = 3 cycles, MAC = 13)
-function swCycleToIdx(c) {
-  let sum = 0;
-  for (let i = 0; i < ROM_SW.length; i++) {
-    const dur = ROM_SW[i].type === 'mac' ? 13 : 3;
-    sum += dur;
-    if (c < sum) return i;
-  }
-  return ROM_SW.length;
+function colorForInstruction(item, done, active, alreadyDone) {
+  if (done) return DONE_C;
+  if (active) return '#f4f4f4';
+  if (alreadyDone) return item.type === 'add' ? '#dedede' : '#9ab0cc';
+  if (item.type === 'mac') return HW_COLOR;
+  if (item.type === 'add') return ADD_C;
+  if (item.type === 'setup') return SETUP_C;
+  return BOOK_C;
 }
 
-function hwCycleToIdx(c) {
-  let sum = 0;
-  for (let i = 0; i < ROM_HW.length; i++) {
-    const dur = ROM_HW[i].type === 'mac' ? 13 : 3;
-    sum += dur;
-    if (c < sum) return i;
-  }
-  return ROM_HW.length;
-}
+function drawProgramGrid(ctx, program, x0, y0, gridWidth, gridHeight, activeIndex, done) {
+  const count = program.length;
+  const cols = count <= 4 ? count : Math.ceil(Math.sqrt(count * 2.2));
+  const rows = Math.ceil(count / cols);
+  const gap = 2;
+  const cellWidth = Math.min(88, (gridWidth - gap * (cols - 1)) / cols);
+  const cellHeight = Math.min(40, (gridHeight - gap * (rows - 1)) / rows);
+  const totalWidth = cellWidth * cols + gap * (cols - 1);
+  const totalHeight = cellHeight * rows + gap * (rows - 1);
+  const startX = x0 + (gridWidth - totalWidth) / 2;
+  const startY = y0 + (gridHeight - totalHeight) / 2;
 
-// total cycles
-const SW_TOTAL = 2 * 3 + 50 * 3 + 2 * 3 + 13 + 3; // =  3+3+150+3+3+3+13+3 = 181? let me recalc
-// LDIA(3) + LDIB(3) + 50×ADD(150) + STA(3) + LDIA(3) + LDIB(3) + MAC(13) + STA(3) = 181
-const HW_TOTAL = 3 + 3 + 3 + 3 + 3 + 13 + 3; // = 31
+  for (let i = 0; i < count; i += 1) {
+    const item = program[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = startX + col * (cellWidth + gap);
+    const y = startY + row * (cellHeight + gap);
+    const active = i === activeIndex && !done;
+    const alreadyDone = i < activeIndex;
 
-function drawRomGrid(canvas) {
-  const { w, h } = dpi(canvas);
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = colorForInstruction(item, done, active, alreadyDone);
+    ctx.fillRect(x, y, cellWidth, cellHeight);
 
-  // Layout: two grids side by side with labels
-  const pad = 16;
-  const midX = w / 2;
-  const labelH = 26;
-  const gridH = h - labelH - pad * 2;
+    if (active) {
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, cellWidth, cellHeight);
+    }
 
-  // ── helpers ──
-  function drawGrid(rom, x0, gw, activeIdx, done) {
-    const n = rom.length;
-    const cols = Math.ceil(Math.sqrt(n * 2.5)) | 0 || 8;
-    const rows = Math.ceil(n / cols);
-    const cellW = (gw - pad) / cols;
-    const cellH = Math.min(cellW * 0.65, gridH / rows);
-    const totalGridH = cellH * rows;
-    const startY = labelH + pad + (gridH - totalGridH) / 2;
-
-    for (let i = 0; i < n; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const cx = x0 + pad / 2 + col * cellW + 1;
-      const cy = startY + row * cellH + 1;
-      const cw = cellW - 2;
-      const ch = cellH - 2;
-
-      let fill = ADD_C;
-      if (rom[i].type === 'book') fill = BOOK_C;
-      if (rom[i].type === 'mac')  fill = HW_COLOR;
-
-      if (done) fill = DONE_C;
-      else if (i === activeIdx) fill = '#f0f0f0';
-      else if (i < activeIdx) fill = done ? DONE_C : (rom[i].type === 'add' ? '#dedede' : '#9ab0cc');
-
-      ctx.fillStyle = fill;
-      ctx.fillRect(cx, cy, cw, ch);
-
-      // active pulse border
-      if (i === activeIdx && !done) {
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx, cy, cw, ch);
-      }
-
-      // label on non-add small cells
-      if (rom[i].type !== 'add' && cellW > 40) {
-        ctx.fillStyle = i <= activeIdx || done ? '#fff' : '#fff';
-        ctx.font = `bold ${Math.max(8, cellW * 0.18)}px "Helvetica Neue", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(rom[i].label, cx + cw / 2, cy + ch / 2);
-      }
+    const canLabel = item.type !== 'add' && cellWidth >= 34 && cellHeight >= 16;
+    if (canLabel) {
+      ctx.fillStyle = active ? '#333' : '#fff';
+      ctx.font = `bold ${Math.max(8, Math.min(12, cellWidth * 0.16))}px Helvetica, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.label, x + cellWidth / 2, y + cellHeight / 2);
     }
   }
+}
 
-  // Labels
-  ctx.font = '600 12px "Helvetica Neue", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = '#555';
+function drawRomGrid(canvas) {
+  const { ctx, width, height } = prepareCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
 
-  const swActiveIdx = Math.min(swCycleToIdx(raceCycle), ROM_SW.length - 1);
-  const hwActiveIdx = Math.min(hwCycleToIdx(raceCycle), ROM_HW.length - 1);
+  const pad = 16;
+  const titleY = pad;
+  const gridY = 48;
+  const barY = height - pad - 8;
+  const gridHeight = barY - gridY - 16;
+  const midX = width / 2;
+  const columnWidth = midX - pad * 1.5;
+
   const swDone = raceCycle >= SW_TOTAL;
   const hwDone = raceCycle >= HW_TOTAL;
+  const swIndex = clamp(cycleToIndex(ROM_SW, raceCycle), 0, ROM_SW.length - 1);
+  const hwIndex = clamp(cycleToIndex(ROM_HW, raceCycle), 0, ROM_HW.length - 1);
 
-  // Divider
   ctx.strokeStyle = LINE_C;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(midX, pad);
-  ctx.lineTo(midX, h - pad);
+  ctx.lineTo(midX, height - pad);
   ctx.stroke();
 
-  // SW side
-  const swCycText = swDone ? 'DONE' : `Cycle ${Math.min(raceCycle, SW_TOTAL)}`;
+  ctx.font = '600 12px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+
   ctx.fillStyle = '#333';
-  ctx.fillText(`Software  — ${ROM_SW.length} instructions  (${swCycText})`, pad + (midX - pad) / 2, pad);
-  drawGrid(ROM_SW, 0, midX, swActiveIdx, swDone);
+  ctx.fillText(`Software loop - cycle ${Math.min(raceCycle, SW_TOTAL)} / ${SW_TOTAL}`, midX / 2, titleY);
 
-  // HW side
-  const hwCycText = hwDone ? `DONE at cycle ${HW_TOTAL}` : `Cycle ${Math.min(raceCycle, HW_TOTAL)}`;
   ctx.fillStyle = hwDone ? DONE_C : '#333';
-  ctx.fillText(`Hardware  — ${ROM_HW.length} instructions  (${hwCycText})`, midX + (midX - pad) / 2, pad);
-  drawGrid(ROM_HW, midX, midX, hwActiveIdx, hwDone);
+  const hwLabel = hwDone ? `MAC done at cycle ${HW_TOTAL}` : `MAC wait - cycle ${Math.min(raceCycle, HW_TOTAL)} / ${HW_TOTAL}`;
+  ctx.fillText(hwLabel, midX + midX / 2, titleY);
 
-  // Cycle progress bar at bottom
-  const barY = h - pad - 6;
-  const barW = w - pad * 2;
-  ctx.fillStyle = '#eee';
-  ctx.fillRect(pad, barY, barW, 4);
-  const frac = Math.min(raceCycle / SW_TOTAL, 1);
+  drawProgramGrid(ctx, ROM_SW, pad, gridY, columnWidth, gridHeight, swIndex, swDone);
+  drawProgramGrid(ctx, ROM_HW, midX + pad / 2, gridY, columnWidth, gridHeight, hwIndex, hwDone);
+
+  const barX = pad;
+  const barWidth = width - pad * 2;
+  ctx.fillStyle = '#eeeeee';
+  ctx.fillRect(barX, barY, barWidth, 4);
+
+  const swFrac = clamp(raceCycle / SW_TOTAL, 0, 1);
   ctx.fillStyle = swDone ? DONE_C : SW_COLOR;
-  ctx.fillRect(pad, barY, barW * frac, 4);
-  // HW marker
-  const hwX = pad + barW * (HW_TOTAL / SW_TOTAL);
+  ctx.fillRect(barX, barY, barWidth * swFrac, 4);
+
+  const hwX = barX + barWidth * (HW_TOTAL / SW_TOTAL);
   ctx.fillStyle = HW_COLOR;
-  ctx.fillRect(hwX - 1, barY - 3, 2, 10);
+  ctx.fillRect(hwX - 1, barY - 4, 2, 12);
 }
 
 function raceStep() {
   const canvas = document.getElementById('rom-canvas');
+  if (!canvas) return;
+
   drawRomGrid(canvas);
+
   if (raceCycle < SW_TOTAL) {
     raceCycle += 2;
     raceRaf = requestAnimationFrame(raceStep);
-  } else {
-    raceRunning = false;
-    document.getElementById('race-btn').textContent = '↺ Replay';
-  }
-}
-
-function raceToggle() {
-  const btn = document.getElementById('race-btn');
-  if (raceRunning) {
-    cancelAnimationFrame(raceRaf);
-    raceRunning = false;
-    btn.textContent = '▶ Resume';
     return;
   }
-  if (raceCycle >= SW_TOTAL) {
-    raceCycle = 0;
-    btn.textContent = '▶ Run';
-  }
+
+  raceRunning = false;
+  raceCycle = SW_TOTAL;
+  drawRomGrid(canvas);
+  buttonText('race-btn', 'Replay');
+}
+
+function resetRace() {
+  cancelAnimationFrame(raceRaf);
+  raceRunning = false;
+  raceCycle = 0;
+  buttonText('race-btn', 'Run');
+  const canvas = document.getElementById('rom-canvas');
+  if (canvas) drawRomGrid(canvas);
+}
+
+function startRaceAuto() {
+  cancelAnimationFrame(raceRaf);
+  raceCycle = 0;
   raceRunning = true;
-  btn.textContent = '⏸ Pause';
+  buttonText('race-btn', 'Pause');
   raceStep();
 }
 
-/* ══════════════════════════════════════════════════════════════
-   VISUAL 2 — STATE RIBBON
-   Top row: SW path — 160 cycles of Fetch/Decode/Execute × 50 ADDs
-   Bottom row: HW path — Fetch/Decode/MAC_WAIT(13)/Execute for MAC
-   ══════════════════════════════════════════════════════════════ */
+function raceToggle() {
+  if (raceRunning) {
+    cancelAnimationFrame(raceRaf);
+    raceRunning = false;
+    buttonText('race-btn', 'Resume');
+    return;
+  }
 
-// Build SW state sequence (cycle by cycle for first 160 cycles shown)
-// Each instruction: F(1 cycle), D(1), E(1) → 3 cycles total
-// We show the first 3 + 3 + 50×3 = 156 cycles (LDIA+LDIB+50×ADD) + 4 more
-function buildSwStates(nInstr, extraInstr) {
-  const states = [];
-  // LDIA, LDIB
-  for (let k = 0; k < 2; k++) {
-    states.push({ s: '001', c: FETCH_C });
-    states.push({ s: '010', c: DECODE_C });
-    states.push({ s: '100', c: EXEC_C });
-  }
-  for (let i = 0; i < nInstr; i++) {
-    states.push({ s: '001', c: FETCH_C });
-    states.push({ s: '010', c: DECODE_C });
-    states.push({ s: '100', c: EXEC_C });
-  }
+  if (raceCycle >= SW_TOTAL) raceCycle = 0;
+  raceRunning = true;
+  buttonText('race-btn', 'Pause');
+  raceStep();
+}
+
+/* Visual 2: control-state ribbon */
+
+function pushInstructionStates(states) {
+  states.push({ s: '001', c: FETCH_C });
+  states.push({ s: '010', c: DECODE_C });
+  states.push({ s: '100', c: EXEC_C });
+}
+
+function buildSwStates() {
+  const states = [{ s: 'rst', c: SETUP_C }];
+  pushInstructionStates(states);
+  pushInstructionStates(states);
+  for (let i = 0; i < 50; i += 1) pushInstructionStates(states);
+  pushInstructionStates(states);
   return states;
 }
 
 function buildHwStates() {
   const states = [];
-  // LDIA (3) + LDIB (3)
-  for (let k = 0; k < 2; k++) {
-    states.push({ s: '001', c: FETCH_C });
-    states.push({ s: '010', c: DECODE_C });
-    states.push({ s: '100', c: EXEC_C });
-  }
-  // MAC: Fetch, Decode, 13 MAC_WAIT, Execute (writeback)
   states.push({ s: '001', c: FETCH_C });
   states.push({ s: '010', c: DECODE_C });
-  for (let i = 0; i < 13; i++) states.push({ s: '111', c: WAIT_C });
+  for (let i = 0; i < 13; i += 1) states.push({ s: '111', c: WAIT_C });
   states.push({ s: '100', c: EXEC_C });
   return states;
 }
 
-const SW_STATES = buildSwStates(50);
+const SW_STATES = buildSwStates();
 const HW_STATES = buildHwStates();
+const RIBBON_MAX = SW_STATES.length;
 
 let ribbonRunning = false;
-let ribbonCycle   = 0;
-let ribbonRaf     = null;
-const RIBBON_MAX  = SW_STATES.length;
+let ribbonCycle = 0;
+let ribbonRaf = null;
 
 function drawRibbon(canvas) {
-  const { w, h } = dpi(canvas);
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, w, h);
+  const { ctx, width, height } = prepareCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
 
   const pad = 16;
-  const labelW = 72;
-  const totalW = w - pad * 2 - labelW;
-  const rowH = 36;
-  const rowGap = 24;
-  const row1Y = pad + 20;
-  const row2Y = row1Y + rowH + rowGap;
-  const cellW = Math.max(1, totalW / RIBBON_MAX);
+  const labelWidth = 76;
+  const x0 = pad + labelWidth;
+  const totalWidth = width - pad * 2 - labelWidth;
+  const rowHeight = 36;
+  const row1Y = 38;
+  const row2Y = 98;
+  const cellWidth = totalWidth / RIBBON_MAX;
 
-  // Row labels
-  ctx.font = '600 11px "Helvetica Neue", sans-serif';
+  ctx.font = '600 11px Helvetica, Arial, sans-serif';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = SW_COLOR;
-  ctx.fillText('SOFTWARE', pad + labelW - 8, row1Y + rowH / 2);
+  ctx.fillText('SOFTWARE', pad + labelWidth - 8, row1Y + rowHeight / 2);
   ctx.fillStyle = HW_COLOR;
-  ctx.fillText('HARDWARE', pad + labelW - 8, row2Y + rowH / 2);
+  ctx.fillText('HARDWARE', pad + labelWidth - 8, row2Y + rowHeight / 2);
 
-  const xOff = pad + labelW;
-
-  // SW ribbon
-  const swVisible = Math.min(ribbonCycle, SW_STATES.length);
-  for (let i = 0; i < swVisible; i++) {
+  const swVisible = clamp(ribbonCycle, 0, SW_STATES.length);
+  for (let i = 0; i < swVisible; i += 1) {
     ctx.fillStyle = SW_STATES[i].c;
-    ctx.fillRect(xOff + i * cellW, row1Y, Math.max(cellW, 1) + 0.5, rowH);
+    ctx.fillRect(x0 + i * cellWidth, row1Y, Math.max(cellWidth, 1), rowHeight);
   }
 
-  // HW ribbon
-  const hwVisible = Math.min(ribbonCycle, HW_STATES.length);
-  for (let i = 0; i < hwVisible; i++) {
+  const hwVisible = clamp(ribbonCycle, 0, HW_STATES.length);
+  for (let i = 0; i < hwVisible; i += 1) {
     ctx.fillStyle = HW_STATES[i].c;
-    ctx.fillRect(xOff + i * cellW, row2Y, Math.max(cellW, 1) + 0.5, rowH);
+    ctx.fillRect(x0 + i * cellWidth, row2Y, Math.max(cellWidth, 1), rowHeight);
   }
 
-  // HW done marker
   if (ribbonCycle >= HW_STATES.length) {
-    const doneX = xOff + HW_STATES.length * cellW + 6;
     ctx.fillStyle = DONE_C;
-    ctx.font = 'bold 11px "Helvetica Neue", sans-serif';
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`✓ Done (${HW_STATES.length} cycles)`, doneX, row2Y + rowH / 2);
+    ctx.fillText('Done: 13 MAC_WAIT cycles', x0 + HW_STATES.length * cellWidth + 8, row2Y + rowHeight / 2);
   }
 
-  // Cycle counter
-  ctx.fillStyle = '#999';
-  ctx.font = '11px "Helvetica Neue", sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText(`Cycle ${Math.min(ribbonCycle, RIBBON_MAX)} / ${RIBBON_MAX}`, xOff, h - pad);
-
-  // border outlines
   ctx.strokeStyle = LINE_C;
   ctx.lineWidth = 1;
-  ctx.strokeRect(xOff, row1Y, totalW, rowH);
-  ctx.strokeRect(xOff, row2Y, totalW, rowH);
+  ctx.strokeRect(x0, row1Y, totalWidth, rowHeight);
+  ctx.strokeRect(x0, row2Y, totalWidth, rowHeight);
+
+  ctx.fillStyle = '#777';
+  ctx.font = '11px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`Cycle ${Math.min(ribbonCycle, RIBBON_MAX)} / ${RIBBON_MAX}`, x0, height - pad);
 }
 
 function ribbonStep() {
   const canvas = document.getElementById('ribbon-canvas');
+  if (!canvas) return;
+
   drawRibbon(canvas);
+
   if (ribbonCycle < RIBBON_MAX) {
     ribbonCycle += 3;
     ribbonRaf = requestAnimationFrame(ribbonStep);
-  } else {
-    ribbonRunning = false;
-    document.getElementById('ribbon-btn').textContent = '↺ Replay';
-  }
-}
-
-function ribbonToggle() {
-  const btn = document.getElementById('ribbon-btn');
-  if (ribbonRunning) {
-    cancelAnimationFrame(ribbonRaf);
-    ribbonRunning = false;
-    btn.textContent = '▶ Resume';
     return;
   }
-  if (ribbonCycle >= RIBBON_MAX) {
-    ribbonCycle = 0;
-    btn.textContent = '▶ Animate';
-  }
+
+  ribbonRunning = false;
+  ribbonCycle = RIBBON_MAX;
+  drawRibbon(canvas);
+  buttonText('ribbon-btn', 'Replay');
+}
+
+function resetRibbon() {
+  cancelAnimationFrame(ribbonRaf);
+  ribbonRunning = false;
+  ribbonCycle = 0;
+  buttonText('ribbon-btn', 'Animate');
+  const canvas = document.getElementById('ribbon-canvas');
+  if (canvas) drawRibbon(canvas);
+}
+
+function startRibbonAuto() {
+  cancelAnimationFrame(ribbonRaf);
+  ribbonCycle = 0;
   ribbonRunning = true;
-  btn.textContent = '⏸ Pause';
+  buttonText('ribbon-btn', 'Pause');
   ribbonStep();
 }
 
-/* ══════════════════════════════════════════════════════════════
-   VISUAL 3 — SCALING CHART
-   Verified data from bench_multi_tb.vhd
-   ══════════════════════════════════════════════════════════════ */
+function ribbonToggle() {
+  if (ribbonRunning) {
+    cancelAnimationFrame(ribbonRaf);
+    ribbonRunning = false;
+    buttonText('ribbon-btn', 'Resume');
+    return;
+  }
+
+  if (ribbonCycle >= RIBBON_MAX) ribbonCycle = 0;
+  ribbonRunning = true;
+  buttonText('ribbon-btn', 'Pause');
+  ribbonStep();
+}
+
+/* Visual 3: scaling chart */
 
 const BENCH_DATA = [
-  { n: 10,  sw: 40,  hw: 13 },
-  { n: 25,  sw: 85,  hw: 13 },
-  { n: 50,  sw: 160, hw: 13 },
+  { n: 10, sw: 40, hw: 13 },
+  { n: 25, sw: 85, hw: 13 },
+  { n: 50, sw: 160, hw: 13 },
   { n: 100, sw: 310, hw: 13 },
 ];
 
-function drawChart(canvas) {
-  const { w, h } = dpi(canvas);
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, w, h);
+let chartProgress = 0;
+let chartRunning = false;
+let chartRaf = null;
+let chartStart = 0;
+
+function drawChart(canvas, progress = chartProgress) {
+  const { ctx, width, height } = prepareCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
 
   const pad = { top: 20, right: 60, bottom: 36, left: 52 };
-  const gw = w - pad.left - pad.right;
-  const gh = h - pad.top - pad.bottom;
+  const graphWidth = width - pad.left - pad.right;
+  const graphHeight = height - pad.top - pad.bottom;
+  const maxCycles = 340;
+  const maxN = 110;
+  const visibleN = maxN * clamp(progress, 0, 1);
 
-  const maxSW = 340;
-  const maxN  = 110;
+  const px = (n) => pad.left + (n / maxN) * graphWidth;
+  const py = (cycles) => pad.top + graphHeight - (cycles / maxCycles) * graphHeight;
 
-  function px(n)    { return pad.left + (n / maxN) * gw; }
-  function py(cyc)  { return pad.top + gh - (cyc / maxSW) * gh; }
-
-  // Grid
   ctx.strokeStyle = '#ececec';
   ctx.lineWidth = 1;
-  for (let c = 0; c <= maxSW; c += 50) {
+  for (let cycles = 0; cycles <= maxCycles; cycles += 50) {
     ctx.beginPath();
-    ctx.moveTo(pad.left, py(c));
-    ctx.lineTo(pad.left + gw, py(c));
+    ctx.moveTo(pad.left, py(cycles));
+    ctx.lineTo(pad.left + graphWidth, py(cycles));
     ctx.stroke();
-    ctx.fillStyle = '#aaa';
-    ctx.font = '10px "Helvetica Neue", sans-serif';
+
+    ctx.fillStyle = '#999';
+    ctx.font = '10px Helvetica, Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.fillText(c, pad.left - 6, py(c));
+    ctx.fillText(cycles, pad.left - 6, py(cycles));
   }
 
-  // Axes
   ctx.strokeStyle = '#999';
-  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(pad.left, pad.top);
-  ctx.lineTo(pad.left, pad.top + gh);
-  ctx.lineTo(pad.left + gw, pad.top + gh);
+  ctx.lineTo(pad.left, pad.top + graphHeight);
+  ctx.lineTo(pad.left + graphWidth, pad.top + graphHeight);
   ctx.stroke();
 
-  // Axis labels
   ctx.fillStyle = '#777';
-  ctx.font = '11px "Helvetica Neue", sans-serif';
+  ctx.font = '11px Helvetica, Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText('N (operand size)', pad.left + gw / 2, h - 14);
+  ctx.fillText('N', pad.left + graphWidth / 2, height - 14);
 
   ctx.save();
-  ctx.translate(12, pad.top + gh / 2);
+  ctx.translate(12, pad.top + graphHeight / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.fillText('Cycles', 0, 0);
   ctx.restore();
 
-  // SW line — 3N+10
-  ctx.beginPath();
-  ctx.strokeStyle = SW_COLOR;
-  ctx.lineWidth = 2;
-  for (let n = 0; n <= maxN; n += 2) {
-    const cyc = 10 + 3 * n;
-    if (n === 0) ctx.moveTo(px(n), py(cyc));
-    else         ctx.lineTo(px(n), py(cyc));
-  }
-  ctx.stroke();
-
-  // HW line — constant 13
-  ctx.beginPath();
-  ctx.strokeStyle = HW_COLOR;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 3]);
-  ctx.moveTo(px(0), py(13));
-  ctx.lineTo(px(maxN), py(13));
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Data points + labels
-  BENCH_DATA.forEach(d => {
-    // SW point
+  if (visibleN > 0) {
     ctx.beginPath();
-    ctx.arc(px(d.n), py(d.sw), 5, 0, Math.PI * 2);
+    ctx.strokeStyle = SW_COLOR;
+    ctx.lineWidth = 2;
+    const swSteps = Math.max(1, Math.floor(visibleN));
+    for (let n = 0; n <= swSteps; n += 1) {
+      const cycles = 10 + 3 * n;
+      if (n === 0) ctx.moveTo(px(n), py(cycles));
+      else ctx.lineTo(px(n), py(cycles));
+    }
+    ctx.lineTo(px(visibleN), py(10 + 3 * visibleN));
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = HW_COLOR;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.moveTo(px(0), py(13));
+    ctx.lineTo(px(visibleN), py(13));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  BENCH_DATA.forEach((point) => {
+    ctx.fillStyle = '#999';
+    ctx.font = '10px Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(point.n, px(point.n), pad.top + graphHeight + 6);
+
+    if (point.n > visibleN) return;
+
+    ctx.beginPath();
+    ctx.arc(px(point.n), py(point.sw), 5, 0, Math.PI * 2);
     ctx.fillStyle = SW_COLOR;
     ctx.fill();
 
-    // HW point
     ctx.beginPath();
-    ctx.arc(px(d.n), py(d.hw), 5, 0, Math.PI * 2);
+    ctx.arc(px(point.n), py(point.hw), 5, 0, Math.PI * 2);
     ctx.fillStyle = HW_COLOR;
     ctx.fill();
 
-    // Speedup label between points
-    const spd = (d.sw / d.hw).toFixed(1);
-    const midY = (py(d.sw) + py(d.hw)) / 2;
+    const speedup = (point.sw / point.hw).toFixed(1);
+    const midY = (py(point.sw) + py(point.hw)) / 2;
     ctx.fillStyle = '#555';
-    ctx.font = 'bold 11px "Helvetica Neue", sans-serif';
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${spd}×`, px(d.n) + 18, midY);
-
-    // N label on axis
-    ctx.fillStyle = '#999';
-    ctx.font = '10px "Helvetica Neue", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(d.n, px(d.n), pad.top + gh + 6);
+    ctx.fillText(`${speedup}x`, px(point.n) + 20, midY);
   });
 
-  // Formula annotations
-  ctx.fillStyle = SW_COLOR;
-  ctx.font = 'italic 11px Georgia, serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('SW = 3N + 10', px(55), py(10 + 3 * 55) - 12);
+  if (progress > 0.85) {
+    ctx.fillStyle = SW_COLOR;
+    ctx.font = 'italic 11px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('SW = 3N + 10', px(55), py(10 + 3 * 55) - 12);
 
-  ctx.fillStyle = HW_COLOR;
-  ctx.fillText('HW = 13  (constant)', px(55), py(13) - 10);
+    ctx.fillStyle = HW_COLOR;
+    ctx.fillText('HW = 13', px(55), py(13) - 10);
+  }
 }
 
-/* ══════════════════════════════════════════════════════════════
-   INIT — draw static states on load
-   ══════════════════════════════════════════════════════════════ */
+function chartStep(timestamp) {
+  const canvas = document.getElementById('chart-canvas');
+  if (!canvas) return;
+
+  if (!chartStart) chartStart = timestamp;
+  chartProgress = clamp((timestamp - chartStart) / 1400, 0, 1);
+  drawChart(canvas, chartProgress);
+
+  if (chartProgress < 1) {
+    chartRaf = requestAnimationFrame(chartStep);
+    return;
+  }
+
+  chartRunning = false;
+}
+
+function resetChart() {
+  cancelAnimationFrame(chartRaf);
+  chartRunning = false;
+  chartStart = 0;
+  chartProgress = 0;
+  const canvas = document.getElementById('chart-canvas');
+  if (canvas) drawChart(canvas, chartProgress);
+}
+
+function startChartAuto() {
+  cancelAnimationFrame(chartRaf);
+  chartRunning = true;
+  chartStart = 0;
+  chartProgress = 0;
+  chartRaf = requestAnimationFrame(chartStep);
+}
+
+/* Scroll replay */
+
+function setupAutoReplay() {
+  if (!('IntersectionObserver' in window)) return;
+
+  const players = [
+    { selector: '#rom-race .interactive-demo', start: startRaceAuto, reset: resetRace },
+    { selector: '#ribbon .interactive-demo', start: startRibbonAuto, reset: resetRibbon },
+    { selector: '#scaling .interactive-demo', start: startChartAuto, reset: resetChart },
+  ];
+
+  const stateByElement = new Map();
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const state = stateByElement.get(entry.target);
+      if (!state) return;
+
+      const visible = entry.isIntersecting && entry.intersectionRatio >= 0.35;
+      if (visible && !state.visible) {
+        state.visible = true;
+        state.start();
+      }
+
+      if (!visible && state.visible) {
+        state.visible = false;
+        state.reset();
+      }
+    });
+  }, {
+    threshold: [0, 0.2, 0.35, 0.6, 1],
+    rootMargin: '0px 0px -10% 0px',
+  });
+
+  players.forEach((player) => {
+    const element = document.querySelector(player.selector);
+    if (!element) return;
+    stateByElement.set(element, {
+      visible: false,
+      start: player.start,
+      reset: player.reset,
+    });
+    observer.observe(element);
+  });
+}
 
 window.addEventListener('load', () => {
-  // ROM grid — static initial
-  const romCanvas = document.getElementById('rom-canvas');
-  if (romCanvas) drawRomGrid(romCanvas);
-
-  // Ribbon — static initial
-  const ribbonCanvas = document.getElementById('ribbon-canvas');
-  if (ribbonCanvas) drawRibbon(ribbonCanvas);
-
-  // Chart — always static
-  const chartCanvas = document.getElementById('chart-canvas');
-  if (chartCanvas) drawChart(chartCanvas);
+  resetRace();
+  resetRibbon();
+  resetChart();
+  setupAutoReplay();
 });
 
-// Redraw on resize
 window.addEventListener('resize', () => {
   const romCanvas = document.getElementById('rom-canvas');
-  if (romCanvas) { if (raceRunning) return; drawRomGrid(romCanvas); }
+  if (romCanvas && !raceRunning) drawRomGrid(romCanvas);
 
   const ribbonCanvas = document.getElementById('ribbon-canvas');
-  if (ribbonCanvas) { if (ribbonRunning) return; drawRibbon(ribbonCanvas); }
+  if (ribbonCanvas && !ribbonRunning) drawRibbon(ribbonCanvas);
 
   const chartCanvas = document.getElementById('chart-canvas');
-  if (chartCanvas) drawChart(chartCanvas);
+  if (chartCanvas && !chartRunning) drawChart(chartCanvas, chartProgress);
 });
+
+window.raceToggle = raceToggle;
+window.ribbonToggle = ribbonToggle;
