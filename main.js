@@ -535,42 +535,46 @@ function setupAutoReplay() {
   if (!('IntersectionObserver' in window)) return;
 
   const players = [
-    { selector: '#rom-race .interactive-demo', start: startRaceAuto, reset: resetRace },
-    { selector: '#ribbon .interactive-demo', start: startRibbonAuto, reset: resetRibbon },
-    { selector: '#scaling .interactive-demo', start: startChartAuto, reset: resetChart },
+    {
+      selector: '#rom-canvas',
+      isDone: () => !raceRunning && raceCycle >= SW_TOTAL,
+      isRunning: () => raceRunning,
+      start: startRaceAuto,
+    },
+    {
+      selector: '#ribbon-canvas',
+      isDone: () => !ribbonRunning && ribbonCycle >= RIBBON_MAX,
+      isRunning: () => ribbonRunning,
+      start: startRibbonAuto,
+    },
+    {
+      selector: '#chart-canvas',
+      isDone: () => !chartRunning && chartProgress >= 1,
+      isRunning: () => chartRunning,
+      start: startChartAuto,
+    },
   ];
 
-  const stateByElement = new Map();
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-      const state = stateByElement.get(entry.target);
-      if (!state) return;
+      if (!entry.isIntersecting) return;
 
-      const visible = entry.isIntersecting && entry.intersectionRatio >= 0.35;
-      if (visible && !state.visible) {
-        state.visible = true;
-        state.start();
-      }
+      const player = players.find(p => entry.target === document.querySelector(p.selector));
+      if (!player) return;
 
-      if (!visible && state.visible) {
-        state.visible = false;
-        state.reset();
+      // Start if never played (done=false, running=false, cycle=0) or if already finished
+      if (!player.isRunning()) {
+        player.start();
       }
     });
   }, {
-    threshold: [0, 0.2, 0.35, 0.6, 1],
-    rootMargin: '0px 0px -10% 0px',
+    threshold: 0.15,
+    rootMargin: '0px 0px -5% 0px',
   });
 
   players.forEach((player) => {
     const element = document.querySelector(player.selector);
-    if (!element) return;
-    stateByElement.set(element, {
-      visible: false,
-      start: player.start,
-      reset: player.reset,
-    });
-    observer.observe(element);
+    if (element) observer.observe(element);
   });
 }
 
