@@ -30,11 +30,11 @@
       </div>
       <div class="meta-item">
         <div class="meta-label">Fmax</div>
-        <div class="meta-value">54.61 MHz<br><span style="font-size:11px;color:var(--muted);">Slow 85 C corner</span></div>
+        <div class="meta-value">~47 MHz<br><span style="font-size:11px;color:var(--muted);">Slow 85°C corner</span></div>
       </div>
       <div class="meta-item">
         <div class="meta-label">Logic Elements</div>
-        <div class="meta-value">11,322 / 114,480<br><span style="font-size:11px;color:var(--muted);">10% utilization</span></div>
+        <div class="meta-value">10,694 / 114,480<br><span style="font-size:11px;color:var(--muted);">9% utilization</span></div>
       </div>
     </div>
   </header>
@@ -43,7 +43,7 @@
 
     <section id="abstract">
       <div class="abstract-box">
-        <p>RISC-NPU tests a small architectural claim in real hardware: a neural operation should not always be treated as a peripheral transaction. By adding a MAC opcode to a custom 32-bit RISC ISA and coupling the NPU directly to the CPU register path, the processor replaces a software accumulation loop with one fixed-latency hardware instruction. The final implementation is verified by Questa simulations and a full Quartus compile on Cyclone IV E hardware, closing timing at 54.61 MHz with positive setup and hold slack, zero DSP block usage, and a 12.3x cycle reduction for the N=50 MAC benchmark.</p>
+        <p>RISC-NPU tests a small architectural claim in real hardware: a neural operation should not always be treated as a peripheral transaction. By adding a MAC opcode to a custom 32-bit RISC ISA and coupling the NPU directly to the CPU register path, the processor replaces a software accumulation loop with one fixed-latency hardware instruction. The final implementation is verified by Questa simulations and a full Quartus compile on Cyclone IV E hardware, verified in simulation and synthesis at approximately 47 MHz Fmax with positive setup and hold slack, zero DSP block usage, and a 12.3x cycle reduction for the N=50 MAC benchmark.</p>
       </div>
     </section>
 
@@ -145,6 +145,16 @@
       <h2>Architecture: One Bus, Two Compute Paths</h2>
 
       <p>The CPU remains intentionally small: a custom instruction word, a register file centered on A and B, an ALU path for ordinary arithmetic, and a control FSM that sequences Fetch, Decode, Execute, and MAC_WAIT. The NPU is not attached as an external coprocessor. It is selected through the existing data mux, and when <code>DATA_MUX = "11"</code>, the NPU output is written directly into register A.</p>
+
+      <div class="interactive-demo" style="margin-bottom:24px;">
+        <div class="demo-header" style="justify-content:space-between;">
+          <span class="demo-title">System Architecture Diagram</span>
+          <a href="risc-npu-architecture.svg" download="risc-npu-architecture.svg" class="demo-btn" style="text-decoration:none;display:inline-block;text-align:center;">Download SVG</a>
+        </div>
+        <a href="risc-npu-architecture.svg" target="_blank">
+          <img src="risc-npu-architecture.svg" alt="RISC-NPU architecture diagram showing CPU, NPU core, data_path, and control FSM" style="width:100%;display:block;border:none;" />
+        </a>
+      </div>
 
       <table class="isa-table">
         <thead>
