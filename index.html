@@ -146,16 +146,6 @@
 
       <p>The CPU remains intentionally small: a custom instruction word, a register file centered on A and B, an ALU path for ordinary arithmetic, and a control FSM that sequences Fetch, Decode, Execute, and MAC_WAIT. The NPU is not attached as an external coprocessor. It is selected through the existing data mux, and when <code>DATA_MUX = "11"</code>, the NPU output is written directly into register A.</p>
 
-      <div class="interactive-demo" style="margin-bottom:24px;">
-        <div class="demo-header" style="justify-content:space-between;">
-          <span class="demo-title">System Architecture Diagram</span>
-          <a href="risc-npu-architecture.svg" download="risc-npu-architecture.svg" class="demo-btn" style="text-decoration:none;display:inline-block;text-align:center;">Download SVG</a>
-        </div>
-        <a href="risc-npu-architecture.svg" target="_blank">
-          <img src="risc-npu-architecture.svg" alt="RISC-NPU architecture diagram showing CPU, NPU core, data_path, and control FSM" style="width:100%;display:block;border:none;" />
-        </a>
-      </div>
-
       <table class="isa-table">
         <thead>
           <tr>
