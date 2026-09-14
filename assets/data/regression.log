@@ -1,0 +1,14 @@
+PASS  multiplier_tb
+PASS  accumulator_tb
+PASS  relu_tb
+PASS  npu_core_tb
+PASS  alu_tb
+PASS  reg_test_tb
+PASS  cpu_add_tb
+PASS  cpu_mac_tb
+PASS  bench_tb
+PASS  bench_multi_tb
+PASS  risc_npu_top_tb
+PASS  npu_inference_tb
+PASS  cpu_branch_tb
+All 13 RISC-NPU GHDL regressions passed. Temporary work directory: C:\Users\jaund\AppData\Local\Temp\risc-npu-ghdl-2adf40e4286146a0afc905e2aa14cfb6

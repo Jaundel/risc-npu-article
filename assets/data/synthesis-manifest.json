@@ -1,0 +1,108 @@
+{
+  "created_utc": "2026-09-13T23:12:06.416891+00:00",
+  "device": "EP4CE115F29C7",
+  "target_clock_mhz": 50,
+  "boundary": "Virtual-pin CPU core including 256x32 data RAM; external instruction source; no program ROM or board I/O",
+  "sources": {
+    "multiplier.vhd": "43932a6c14d2aaab6803f754d034cd242dd30ac1eb5b4a733224acf0eddac4de",
+    "accumulator.vhd": "025d472adc74a8263aa56acc1b3a6ed2f14a5e2b6e77b6dcf188c437bec30673",
+    "relu.vhd": "274e03e343e07edbe341f50d1d3dd420031bda70d4c7f30547fa9c120fb1fcf8",
+    "npu_core.vhd": "5abf5a6feb915758ec4ba03a3ae89306cfc5b5aeb2a36fbb8baf68d0e1b05723",
+    "fulladd.vhd": "44d7dd0d3515cbca558d9bd518f18b0f01da7b17102687faf4c9f9932a66d064",
+    "adder4.vhd": "6b64a1db31ec255ca2d4760822555eef57e34d9a7ab7f474e05da52eafcdfd12",
+    "adder16.vhd": "0b2d2c36f48753e4b807a5906d17a099a139339d16983d021fe086e38ff96c6e",
+    "adder32.vhd": "2cff249e19d58bfd76cd1a212f22a187dc81ddba9f5697b9c2294150bf6aa291",
+    "add.vhd": "5c116881517d7b4a6b2aea99123c0771507be6ccdf2576c82036840cb86200ee",
+    "mux2to1.vhd": "d214ca9c3ea5dd5cb33580b6cbf19c3be846d96ef80bf5de5ca7a7e1e1d18001",
+    "mux4to1.vhd": "28bb585ba4e9a4fd2c9107fe8983a5c4771f297647c405e37a8d50bf31453028",
+    "register32.vhd": "b1a16bd5b7b082e8017f4c9a60a75291281370a15847d1623e57e7e2e25bdbac",
+    "PC.vhd": "1beeb9a0307443cc56a20bcc011fa46a5b363f2b92d5f6e3b222f86d8f0bf7fd",
+    "LZE.vhd": "f2d8189b785c18d713a5847a7e59079f4e175944322af361e50ed25bfc49c35b",
+    "UZE.vhd": "3340fa862072e609cead98a849cac494663965b9a7fa91d3402d8bae34efec6b",
+    "RED.vhd": "e266cc3d79bd127a65ce7bb309cc145eb44f5c1802d0bd5bbbc98863668a16cd",
+    "alu.vhd": "ada5f26a38130afe9fa8844ff23dc778baa14113dfdb399b4a4b8e798ca415b4",
+    "data_mem.vhd": "b2e8dfc67975e36a02926d6aa8d2e24cd6e4087480c956f1d0032ccfbb9a14c7",
+    "data_path.vhd": "044e92e0312ec9db570beee0556b01b219d936814a13e305ea7a2db6b054657a",
+    "reset_circuit.vhd": "a669bce08c7bcda60dcdfbd9de159e059c4d89680b121152e91b3b5baf61fa71",
+    "Control_New.vhd": "69caae85669d48dad4b7da33771d2a4709a337d20fbe522da44cef4051cb13c4",
+    "cpu1.vhd": "629475f379f1575c8a77ea393ff4ef1ab2ef72cffbafad24b0174305e9e057a8",
+    "research\\research_core_top.vhd": "16770df0a0de6d0069b8b9d52348ffbb5ac21c014a38960c9026a5137646d498",
+    "research\\run_synthesis.py": "3e4e7aa8c7c55e078b40caf09ab7d8e4b51e18a32f2ea92e25a7f71646c418fc"
+  },
+  "fits": [
+    {
+      "configuration": "software",
+      "seed": 1,
+      "summary_sha256": "c3d24c7adc383db4f26a5af0126f79b3a96b11be4d3da556884ecf6a9af06145",
+      "timing_sha256": "5e4af84c2c1b3b536d7f8a8dd9744be3d117d82f9f9d84c30edac9ab29648358"
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 1,
+      "summary_sha256": "5e0c1ecf8a1712c278d67413d3bd398c86526eb9cdf547ab01a162b38d5bfcd1",
+      "timing_sha256": "1c17722399facc73490be1b3b2658b5f0dc65612bfa940e1fbdb2ef26ce0ba91"
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 1,
+      "summary_sha256": "23f5cbd866b7ef75e62ce0def22f62861e33656130d2a0c8d0a2017d4fcf1a61",
+      "timing_sha256": "cd4d14fd7b68acce0f43eabe2ec8d1fedcdba8e5543864554f816d5867d705c6"
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 1,
+      "summary_sha256": "6a03b0e3b31d33e9df6e3c42aef8fa95118a073fb650da24655dd3a2550977ae",
+      "timing_sha256": "8021d6652e4049751803668ff6d02360505559b9c11551536d479b5cb605d5a6"
+    },
+    {
+      "configuration": "software",
+      "seed": 2,
+      "summary_sha256": "ec61b6e468bb636909b0d133d027d8c6cb8d5c7b14c31d8916e309fc93b14f89",
+      "timing_sha256": "6ef970ef66c5fd3761f3b0782a33db09e5dd7702376a7f208e96ad5ab894c06f"
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 2,
+      "summary_sha256": "d2866d46079d9c051d7404b7218fe800feb3bad5dca53f468976d6461069703e",
+      "timing_sha256": "ba14c7b3c3ccdc63d73a2ef21431833b0e0b63de8b10ac633e1f7faebf6ac756"
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 2,
+      "summary_sha256": "10b6376a48986de49a36bfa7acd107d1b69381bfea933d33ba0eff485197198a",
+      "timing_sha256": "75954977710f3b179cf0539fe14a25c0e5ac02d516593fe581a60ce3906a396e"
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 2,
+      "summary_sha256": "0ea9c8599ca9962b55b0e693804d13e365a6224897327c3c96604e5fbf1abbbe",
+      "timing_sha256": "28f5049172a51354d220fbfa3a064e2699beaab827d8cb9494249d68795a32e6"
+    },
+    {
+      "configuration": "software",
+      "seed": 3,
+      "summary_sha256": "2b9eed5e30a14c7ed4129135c3178fbb55708161036b7e6d531a273b865df10b",
+      "timing_sha256": "9be2dc5b542bac6c534221422ff8e6b9325c3dfab690ffc782f35f9480c75d13"
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 3,
+      "summary_sha256": "8dc129b4b96bf6802470cff82e8314213b364f9bff968abbe92b85c96abbef7c",
+      "timing_sha256": "631e1a4d33d382c2f00d78bf6474a9224b80b95333742742b117b8c45489c184"
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 3,
+      "summary_sha256": "927a7a8e157876572a57e741b7a625dc4d0658e5b06aefca8cddc6f2e89d1021",
+      "timing_sha256": "10f294eb29677a270e231a0a3efbe8aaa8c341d213493a40119ebefdecdb8bd5"
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 3,
+      "summary_sha256": "bdf22ee3a62c450028a0acd1778d426432d12b1f54b6831ba67d2d49bc06e2f0",
+      "timing_sha256": "367be6c8e5d5577a2ce9458478d2ece98bc6f1dd52ff4007eb692d756c2328d5"
+    }
+  ],
+  "status": "complete",
+  "results_sha256": "433999c085c3a0e30c8df32bb08646089d79702e51f11cd06bba97032390abd1"
+}

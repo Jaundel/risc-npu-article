@@ -3,363 +3,212 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RISC-NPU: ISA-Integrated Neural Acceleration on a Custom FPGA CPU</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="A reproducible FPGA architecture study: complete-program acceleration, controlled MAC ablations, sparse-workload crossover, and implementation cost." />
+  <title>RISC-NPU: From a Faster MAC to a Faster Program</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231d63b7'/%3E%3Cpath d='M14 17h22c9 0 14 5 14 13 0 6-3 10-9 12l10 9H39L29 42h-4v9H14V17zm11 9v8h10c3 0 4-1 4-4s-1-4-4-4H25z' fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css?v=20260913-review" />
 </head>
 <body>
-
 <div class="page-wrap">
-
   <header class="hero">
-    <div class="hero-tag">Research Article | FPGA Architecture | Hardware Acceleration</div>
-
-    <h1>RISC-NPU: ISA-Integrated<br>Neural Acceleration<br>on a Custom FPGA CPU</h1>
-
-    <div class="paper-meta">
-      <div class="meta-item">
-        <div class="meta-label">Platform</div>
-        <div class="meta-value">Altera Cyclone IV E<br>EP4CE115F29C7</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Top Entity</div>
-        <div class="meta-value">risc_npu_top<br><span style="font-size:11px;color:var(--muted);">Board-ready wrapper</span></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Speedup</div>
-        <div class="meta-value" style="color:var(--hw);font-weight:700;font-size:18px;">12.3x<br><span style="font-size:11px;color:var(--muted);font-weight:400;">N=50 benchmark</span></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Fmax</div>
-        <div class="meta-value">~47 MHz<br><span style="font-size:11px;color:var(--muted);">Slow 85°C corner</span></div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Logic Elements</div>
-        <div class="meta-value">10,694 / 114,480<br><span style="font-size:11px;color:var(--muted);">9% utilization</span></div>
-      </div>
-    </div>
+    <div class="hero-tag">An engineering article · Jaundel Simon</div>
+    <h1>RISC-NPU: From a Faster MAC<br> to a Faster Program</h1>
+    <p class="hero-deck">What a small custom processor reveals about arithmetic, instruction overhead, and the cost of moving operands.</p>
+    <p class="article-context">Custom 32-bit processor · CPU simulation and FPGA fitting<br>592 verified kernel runs across four configurations</p>
   </header>
-
   <article>
-
     <section id="abstract">
-      <div class="abstract-box">
-        <p>RISC-NPU tests a small architectural claim in real hardware: a neural operation should not always be treated as a peripheral transaction. By adding a MAC opcode to a custom 32-bit RISC ISA and coupling the NPU directly to the CPU register path, the processor replaces a software accumulation loop with one fixed-latency hardware instruction. The final implementation is verified by Questa simulations and a full Quartus compile on Cyclone IV E hardware, verified in simulation and synthesis at approximately 47 MHz Fmax with positive setup and hold slack, zero DSP block usage, and a 12.3x cycle reduction for the N=50 MAC benchmark.</p>
-      </div>
+      <div class="abstract-box"><p>How much faster does a small processor become when multiplication moves from software into hardware? In RISC-NPU, a 64-element dot product drops from a median <strong>12,648 to 778 clock cycles</strong> in processor simulation. Including input initialization reduces the speedup from 16.26× to 6.12×. The difference is the subject of this article: faster arithmetic helps, but the program still has to load its inputs and issue instructions.</p></div>
+      <nav class="article-nav" aria-label="Article sections"><a href="#question">Question</a><a href="#implementation">Implementation</a><a href="#method">Method</a><a href="#results">Results</a><a href="#sparsity">Crossover</a><a href="#physical">FPGA cost</a><a href="#evidence">Reproduce</a></nav>
     </section>
 
-    <section id="background">
-      <h2>The Architectural Pattern</h2>
+    <section id="question">
+      <h2>Start with the computation</h2>
+      <p>A dot product multiplies two lists element by element, then adds the products. For example, [2, −3, 4] and [5, 2, −1] give 2 × 5 + (−3) × 2 + 4 × (−1) = 0. This is an illustrative example, not a benchmark fixture. Repeating the operation for several rows of weights gives a matrix-vector product, one of the computations used in neural networks.</p>
+      <p>A <strong>multiply–accumulate (MAC)</strong> combines one multiplication with an update to a running sum: sum ← sum + x × w. RISC-NPU adds this operation to a small custom processor. Its signed eight-bit inputs, often called INT8, range from −128 to 127. A wider, 32-bit accumulator holds the sum.</p>
+      <p>The question is how much this instruction helps a <strong>complete kernel</strong>, the short program that loads the operands, computes the answer, and stores it. I compare software multiplication with three hardware configurations, then change the inputs to find where the benefit disappears.</p>
+      <p>The processor has two operand registers, a controller that spends several cycles on an instruction, and 256 words of data memory. It targets an FPGA, a chip whose logic can be configured to implement a circuit. The results here come from simulating its register-transfer-level (RTL) hardware description and fitting that description to an FPGA device. They are not performance measurements from a running board.</p>
+    </section>
 
-      <p>The project follows a pattern that appears repeatedly in modern processors: when a workload becomes common enough, the most effective optimization is often not a faster bus or a larger software library. It is a new instruction that removes the overhead around the operation itself.</p>
+    <section id="lineage">
+      <h2>What I implemented, and what came from research</h2>
+      <p>The paper that motivated the project, <a href="#ref-mixed">Armeniakos and colleagues’ mixed-precision RISC-V work</a>, combines custom instructions with multi-pumped arithmetic, which reuses a unit at a faster internal clock, and soft SIMD, which processes multiple small values together. Its successor, <a href="#ref-marvin">MaRVIn</a>, develops that mixed-precision approach further. RISC-NPU does not reproduce those mechanisms: it has a custom instruction set, not RISC-V, and processes one operand pair at a time.</p>
+      <p>The implementation here is a scalar MAC extension, its connection to the processor controller, and experiments that separate multiplier latency from instruction overhead. <a href="#ref-snitch">Snitch</a> provides a useful reference for reducing instruction and operand-delivery overhead; <a href="#ref-opengemm">OpenGeMM</a> and <a href="#ref-gemmini">Gemmini</a> examine acceleration within larger systems. Their results motivate the questions, not numerical comparisons with this much smaller processor.</p>
+    </section>
 
-      <table class="pattern-table">
-        <thead>
-          <tr>
-            <th>Architecture</th>
-            <th>Extension</th>
-            <th>Target</th>
-            <th>Key Insight</th>
-          </tr>
-        </thead>
+    <section id="implementation">
+      <h2>How the instruction reaches the hardware</h2>
+      <p>The extension reads signed eight-bit operands from the low bytes of registers A and B, latches them when a command is accepted, and returns its result to A through the existing data-selection path. The controller stalls while the command is active. This is <strong>scalar, tightly coupled acceleration</strong>: one operand pair per instruction, not a vector engine or a streaming accelerator.</p>
+      <details class="method-details"><summary>Instruction encodings and exact arithmetic rules</summary>
+      <div class="table-scroll"><table class="isa-table">
+        <thead><tr><th>Instruction</th><th>Encoding</th><th>Architectural behavior</th></tr></thead>
         <tbody>
-          <tr>
-            <td><span class="chip">ARM</span> Cortex-M</td>
-            <td>MAC and DSP-style instructions</td>
-            <td>TinyML and signal processing</td>
-            <td>Keep frequent arithmetic close to the integer pipeline.</td>
-          </tr>
-          <tr>
-            <td><span class="chip">RISC-V</span> RV32</td>
-            <td>Vector and custom extensions</td>
-            <td>Edge inference</td>
-            <td>Expose dot-product structure directly to hardware.</td>
-          </tr>
-          <tr>
-            <td><span class="chip">Intel</span> x86</td>
-            <td>AVX-512 VNNI</td>
-            <td>INT8 inference</td>
-            <td>Fuse multiply and accumulate into one dense instruction stream.</td>
-          </tr>
-          <tr>
-            <td><span class="chip">This Work</span> Custom 32-bit</td>
-            <td>MAC opcode 1011xxxx</td>
-            <td>FPGA CPU/NPU integration</td>
-            <td>Route the NPU result into register A through the existing datapath.</td>
-          </tr>
+          <tr><td>NINIT</td><td class="opcode">0xC0000000</td><td>Sign-extend A[15:0] into the signed 32-bit accumulator.</td></tr>
+          <tr class="mac-row"><td>NMAC</td><td class="opcode">0xD0000000</td><td>Multiply signed A[7:0] × B[7:0], saturating-add into the 32-bit accumulator, return the updated sum in A.</td></tr>
+          <tr><td>NQUANT</td><td class="opcode">0xE0000000 | shift | (relu &lt;&lt; 8)</td><td>Arithmetic right shift by the low five instruction bits; clamp to [−128, 127]. Bit 8 selects [0, 127] instead.</td></tr>
+          <tr><td>Legacy MAC</td><td class="opcode">0xB0000000</td><td>Preserved 16-bit saturating accumulation with ReLU output; not the performance kernel used below.</td></tr>
         </tbody>
-      </table>
-
-      <p>The research value is not that a multiply-accumulate unit is new. The value is that the entire path is measurable from first principles: the instruction encoding, control states, memory image, datapath muxing, NPU latency, testbench output, synthesis utilization, and post-fit timing are all visible in one small system.</p>
-    </section>
-
-    <section id="problem">
-      <h2>The Problem: A CPU Counting to 2500</h2>
-
-      <p>Without the MAC instruction, the CPU computes 50 x 50 by clearing register A, loading register B with 50, and executing 50 ADD instructions. Each ADD moves through Fetch, Decode, and Execute. The benchmark records this path at 160 cycles.</p>
-
-      <div class="equation-block">
-        <div class="eq">SW_cycles = 10 + 3N</div>
-        <div class="eq-label">N=50 gives 10 + 150 = <strong>160 cycles</strong> to produce 2500.</div>
+      </table></div>
+      </details>
+      <p><strong>Saturation</strong> means clamping a result to the largest or smallest representable value instead of wrapping around. NQUANT converts the accumulated sum back to an eight-bit output; its optional ReLU mode replaces negative outputs with zero.</p>
+      <p>NQUANT does not overwrite the wide accumulator. Right shift rounds negative values toward negative infinity; there is no floating-point scale, learned zero point, or round-to-nearest rule hidden in the instruction. “Quantization support” here means this specific conversion, not compatibility with every inference framework.</p>
+      <div class="code-comparison">
+        <div><h3>Software: runtime bit decomposition</h3><pre>sum = 0
+for each runtime coefficient w:
+    if (w &amp; 255) == 0: continue
+    shifted_x = x
+    for bit = 0 … 7:
+        if w &amp; (1 &lt;&lt; bit):
+            if bit &lt; 7: sum += shifted_x
+            else:       sum -= shifted_x
+        shifted_x &lt;&lt;= 1
+store sum</pre></div>
+        <div><h3>Hardware: actual instruction sequence</h3><pre>LDIA  0
+NINIT            // explicit initialization
+LDA   x[0]
+LDB   w[0]
+NMAC             // signed product + sum
+LDA   x[1]
+LDB   w[1]
+NMAC
+…                // dimension-unrolled
+STA   output</pre></div>
       </div>
-
-      <p>The constant term covers reset settling and setup around the loop. The important part is the slope. Every additional unit of N costs another three CPU cycles. At N=100 the software path is 310 cycles. At N=784, the inner accumulation alone becomes thousands of cycles per neuron.</p>
-
-      <pre><span class="hl">0x00000000</span>  - LDIA  0          ; clear accumulator
-<span class="hl">0x10000032</span>  - LDIB  50         ; load operand
-<span class="hl">0x70000000</span>  - ADD              ; repeated 50 times
-0x70000000
-0x70000000
-   ... 47 more ADD words
-0x70000000
-<span class="hl">0x20000000</span>  - STA   0x00       ; store software result
-
-<span class="hl">0x00000032</span>  - LDIA  50
-<span class="hl">0x10000032</span>  - LDIB  50
-<span class="hl">0xB0000000</span>  - MAC              ; hardware path
-<span class="hl">0x20000001</span>  - STA   0x01</pre>
-
-      <p>The final program memory image keeps both paths in one benchmark. The testbench first measures the software loop, then runs the MAC path and checks that both produce the same value, 0x000009C4.</p>
+      <p>The software pseudocode summarizes the emitted assembly. Both programs are unrolled: the generator writes a separate instruction sequence for each element instead of executing an indexed loop. It tests the original coefficient with immediate masks, avoiding repeated coefficient shifts and spills, and skips zero weights at runtime. It is a stronger baseline than operand-magnitude repeated addition. It is still hand-written for this constrained ISA, not a claim to the fastest possible software multiplier.</p>
+      <h3>Change one part at a time</h3>
+      <p><strong>Iterative, staged</strong> uses the eight-step shift-add multiplier and separate states for committing the result. <strong>Iterative, fused</strong> captures the updated wide sum as soon as the product is available, eliminating two cycles without changing the arithmetic. <strong>Parallel, fused</strong> substitutes a registered signed multiplier while keeping the fused path. Every variant has the same command interface and numerical behavior.</p>
+      <p>The exhaustive unit test observes 12, 10, and 2 clock intervals from command acceptance to the completion pulse. Those are <em>unit latencies</em>. A complete NMAC instruction also takes cycles to fetch and start the instruction, receive the completion signal, and return to fetching. Unit latency therefore captures only part of the program’s cost.</p>
     </section>
 
-    <section id="rom-race">
-      <h2>Visual: The Loop Collapses</h2>
-
-      <div class="interactive-demo">
-        <div class="demo-header">
-          <span class="demo-title">Execution trace | N=50 software loop vs MAC instruction latency</span>
-          <button class="demo-btn" id="race-btn" onclick="raceToggle()">Run</button>
-        </div>
-        <canvas id="rom-canvas" height="260"></canvas>
-        <div class="legend-row">
-          <span><span class="legend-dot" style="background:#6b8cba"></span>Setup and store</span>
-          <span><span class="legend-dot" style="background:#aaaaaa"></span>ADD loop</span>
-          <span><span class="legend-dot" style="background:var(--hw)"></span>MAC instruction</span>
-          <span><span class="legend-dot" style="background:#4caf88"></span>Complete</span>
-        </div>
-      </div>
-
-      <p>The software side visualizes the loop that scales with N. The hardware side visualizes the fixed MAC wait counted by the benchmark. That fixed latency is why the N=50 result is 160 cycles divided by 13 cycles, or 12.3x.</p>
-    </section>
-
-    <section id="architecture">
-      <h2>Architecture: One Bus, Two Compute Paths</h2>
-
-      <p>The CPU remains intentionally small: a custom instruction word, a register file centered on A and B, an ALU path for ordinary arithmetic, and a control FSM that sequences Fetch, Decode, Execute, and MAC_WAIT. The NPU is not attached as an external coprocessor. It is selected through the existing data mux, and when <code>DATA_MUX = "11"</code>, the NPU output is written directly into register A.</p>
-
-      <table class="isa-table">
-        <thead>
-          <tr>
-            <th>Opcode</th>
-            <th>Mnemonic</th>
-            <th>Operation</th>
-            <th>Cycles</th>
-            <th>Result Path</th>
-          </tr>
-        </thead>
+    <section id="method">
+      <h2>Measure the program, then explain it</h2>
+      <p>I run each kernel on the CPU hardware description using the GHDL simulator. A common boot prefix writes the input vector and coefficients into data RAM. The arithmetic then reads those runtime values. Firmware depends on matrix dimensions and the selected implementation, not on coefficient values. For each shape and configuration, identical kernel hashes are checked across input families and random seeds.</p>
+      <p>Here, N is the number of operand pairs in a dot product. M is the number of output rows; M = 1 is a single dot product. The tests vary lengths, matrix shapes, signed input values, and the proportion of zero weights. Each configuration receives the same inputs and must store the same answer.</p>
+      <details class="method-details"><summary>Workloads, seeds, and timing boundaries</summary>
+      <div class="table-scroll"><table class="pattern-table">
+        <thead><tr><th>Experimental dimension</th><th>Controlled choice</th></tr></thead>
         <tbody>
-          <tr>
-            <td><span class="opcode">0000 0000</span></td>
-            <td>LDIA</td>
-            <td>A <- imm[23:0]</td>
-            <td>3</td>
-            <td>Instruction immediate to register A</td>
-          </tr>
-          <tr>
-            <td><span class="opcode">0001 0000</span></td>
-            <td>LDIB</td>
-            <td>B <- imm[23:0]</td>
-            <td>3</td>
-            <td>Instruction immediate to register B</td>
-          </tr>
-          <tr>
-            <td><span class="opcode">0111 0000</span></td>
-            <td>ADD</td>
-            <td>A <- A + B</td>
-            <td>3</td>
-            <td>ALU to register A</td>
-          </tr>
-          <tr>
-            <td><span class="opcode">0010 0000</span></td>
-            <td>STA</td>
-            <td>mem[addr] <- A</td>
-            <td>3</td>
-            <td>Register A to data memory</td>
-          </tr>
-          <tr class="mac-row">
-            <td><span class="opcode">1011 0000</span></td>
-            <td>MAC</td>
-            <td>A <- ReLU(A x B)</td>
-            <td>13 wait cycles</td>
-            <td>NPU to register A</td>
-          </tr>
+          <tr><td>Dot products</td><td>N ∈ {1, 4, 8, 16, 32, 64, 96}; signed INT8 operands, signed 32-bit result.</td></tr>
+          <tr><td>Matrix-vector products</td><td>M × N ∈ {4 × 8, 4 × 16, 8 × 16, 4 × 32}; independent output rows.</td></tr>
+          <tr><td>Input families</td><td>All-zero; 80%-zero sampling; small signed values [−7, 7]; uniform signed bytes; alternating extrema −128 and 127.</td></tr>
+          <tr><td>Replicates</td><td>Three input seeds, 1729–1731, for stochastic families; one fixture for each deterministic family.</td></tr>
+          <tr><td>Density sweep</td><td>N = 64; nine target nonzero probabilities from 0 to 1, three seeds each. Plots use realized density, not requested probability.</td></tr>
+          <tr><td>Kernel interval</td><td>First kernel fetch through final output-store retirement, inclusive. Includes accumulator initialization, loads, control, waits, and stores.</td></tr>
+          <tr><td>Cold interval</td><td>First rising edge after reset release through the same final store. Includes reset settling and synthetic input-writing prefix; excludes the reset assertion interval.</td></tr>
+          <tr><td>Correctness</td><td>Independent integer reference; every output checked at storage and read back from RAM after timing ends.</td></tr>
         </tbody>
-      </table>
-
-      <p>The NPU uses a shift-add multiplier, accumulator, and ReLU stage. Quartus maps it without using embedded DSP blocks, which is useful for teaching because the cost of the acceleration is visible in ordinary logic elements rather than hidden inside a hard multiplier primitive.</p>
-
-      <p>The final hardware wrapper matters. Compiling the CPU entity alone proved the core, but it was not the complete FPGA image. The final top entity, <code>risc_npu_top</code>, connects the CPU/NPU system to board clocking, reset, program memory initialized from <code>system_memory.mif</code>, and visible result/status outputs. It is the difference between a simulated processor and a hardware-ready project.</p>
+      </table></div>
+      </details>
+      <p>There are 592 kernel runs and 1,296 verified output values. Repeated identical simulations do not create statistical independence: the plotted ranges describe three different input fixtures, not measurement noise, confidence intervals, or a population-level estimate. Deterministic hardware cycle counts overlap exactly.</p>
+      <p>The kernels compute raw dot products and matrix-vector products, not a trained network. All tested sums fit in signed 32 bits, so software wraparound arithmetic and the NPU’s saturating accumulator agree on this workload. Overflow and conversion semantics are tested separately. No model accuracy, image quality, or inference-energy claim follows from these kernels.</p>
     </section>
 
-    <section id="ribbon">
-      <h2>The Clock-by-Clock Story</h2>
-
-      <p>The control unit exposes a 3-bit state signal, <code>outT</code>, which makes the timing behavior easy to inspect in waveforms. The software path repeats Fetch, Decode, Execute for every ADD. The MAC path enters MAC_WAIT once and holds until the NPU asserts done.</p>
-
-      <div class="interactive-demo">
-        <div class="demo-header">
-          <span class="demo-title">CPU state | 001 Fetch | 010 Decode | 100 Execute | 111 MAC_WAIT</span>
-          <button class="demo-btn" id="ribbon-btn" onclick="ribbonToggle()">Animate</button>
-        </div>
-        <canvas id="ribbon-canvas" height="180"></canvas>
-        <div class="legend-row">
-          <span><span class="legend-dot" style="background:#6b8cba"></span>001 Fetch</span>
-          <span><span class="legend-dot" style="background:#5b9e6b"></span>010 Decode</span>
-          <span><span class="legend-dot" style="background:#e07b3a"></span>100 Execute</span>
-          <span><span class="legend-dot" style="background:var(--hw)"></span>111 MAC_WAIT</span>
-        </div>
-      </div>
-
-      <p>The top ribbon fills with 160 software cycles. The bottom ribbon finishes after the MAC instruction sequence, with the 13 amber cells showing the measured MAC_WAIT period. This is the architectural gain in its most literal form: fewer states, fewer instruction fetches, and no loop overhead.</p>
+    <section id="results">
+      <h2>Where the saved cycles go</h2>
+      <p>For the 64-element uniform signed-byte workload, software takes a median <strong>12,648 cycles</strong> across three input seeds. The staged, fused, and parallel hardware variants take <strong>1,418, 1,290, and 778 cycles</strong>. The corresponding speedups are 8.92×, 9.80×, and 16.26×. These ratios compare complete, equivalent kernel intervals.</p>
+      <figure tabindex="0" class="research-figure" id="fig-scaling">
+        <a href="assets/figures/01-scaling.svg" aria-label="Open full-resolution scaling figure"><img src="assets/figures/01-scaling.svg" width="1000" height="415" alt="Simulated dot-product cycles grow with vector length. Parallel hardware has the lowest dense-workload cycle count; its speedup approaches sixteen times the software baseline." /></a>
+        <figcaption><strong>Figure 1. Scaling at a matched program boundary.</strong> (a) Kernel cycles; logarithmic vertical axis. (b) Software cycles divided by each hardware variant’s cycles. Lines connect measured lengths, not extrapolated model sizes. Shading is the minimum-to-maximum range across three uniform signed-byte input fixtures; lines show medians. Input initialization is excluded here and included in Figure 4. <a href="assets/data/kernel-results.csv">Data</a> · <a href="assets/figures/01-scaling.svg">Vector figure</a>.</figcaption>
+      </figure>
+      <p>The hardware counts follow an exact accounting identity for this firmware: <strong>C<sub>staged</sub> = M(22N + 10)</strong>, <strong>C<sub>fused</sub> = M(20N + 10)</strong>, and <strong>C<sub>parallel</sub> = M(12N + 10)</strong>. For one 64-element dot product, the parallel count is 12 × 64 + 10 = 778 cycles. C denotes the complete kernel cycle count. These identities summarize the simulated instruction schedule; they are not predictions for caches, external memory, or a different ISA.</p>
+      <figure tabindex="0" class="research-figure" id="fig-budget">
+        <a href="assets/figures/02-cycle-budget.svg" aria-label="Open full-resolution cycle accounting"><img src="assets/figures/02-cycle-budget.svg" width="1000" height="460" loading="lazy" alt="Stacked cycle accounting separates fetch, RAM instruction phases, scalar control, initialization, and NPU wait. Hardware improvement removes wait cycles while other costs remain." /></a>
+        <figcaption><strong>Figure 2. Account for the gain, and for what remains.</strong> Each simulated cycle belongs to exactly one category. Panel (a) includes software; panel (b) expands the hardware rows on a separate linear scale. N = 64, uniform signed-byte fixture, seed 1729. “RAM instruction phases” counts decode/execute phases of data-memory instructions, not physical bus traffic. “NPU wait” includes completion-handshake time and is not multiplier utilization. A related whole-workload breakdown appears in <a href="#ref-bisdu">BISDU</a>.</figcaption>
+      </figure>
+      <p>Removing two retirement cycles saves exactly 128 cycles across 64 MACs. Replacing the multiplier saves a further 512. Yet the sixfold reduction in unit latency from 12 to 2 intervals yields only a <strong>1.82×</strong> improvement from the staged to the parallel <em>complete kernel</em>.</p>
+      <p>In the parallel version, 586 of 778 cycles lie outside the NPU-wait category: 195 fetch cycles, 258 RAM-instruction phases, 130 scalar/issue/control cycles, and three initialization phases. Eliminating all 192 remaining wait cycles would offer at most 1.33× additional speedup if everything else stayed fixed. That is a bound on this accounting partition, not a proposed zero-latency circuit.</p>
     </section>
 
-    <section id="scaling">
-      <h2>The Argument Scales</h2>
-
-      <p>The software path grows linearly because the instruction stream grows linearly. The MAC instruction stays fixed because the wait is defined by the hardware pipeline, not by the numeric size of N in the software loop. The scaling testbench runs N=10, 25, 50, and 100 in one pass.</p>
-
-      <div class="interactive-demo">
-        <div class="demo-header">
-          <span class="demo-title">Speedup vs N | from bench_multi_tb.vhd</span>
-        </div>
-        <canvas id="chart-canvas" height="220"></canvas>
-        <div class="legend-row">
-          <span><span class="legend-dot" style="background:var(--sw)"></span>SW cycles, 3N + 10</span>
-          <span><span class="legend-dot" style="background:var(--hw)"></span>HW MAC_WAIT, 13</span>
-          <span><span class="legend-dot" style="background:#888"></span>Measured speedup</span>
-        </div>
-      </div>
-
-      <div class="finding-grid">
-        <div class="finding-card">
-          <div class="num">3x</div>
-          <div class="lbl">N = 10</div>
-          <div class="desc">40 software cycles vs 13 MAC wait cycles. The benefit exists even at a small operand count.</div>
-        </div>
-        <div class="finding-card">
-          <div class="num">12.3x</div>
-          <div class="lbl">N = 50</div>
-          <div class="desc">160 software cycles vs 13 MAC wait cycles. This is the primary benchmark.</div>
-        </div>
-        <div class="finding-card">
-          <div class="num">23.8x</div>
-          <div class="lbl">N = 100</div>
-          <div class="desc">310 software cycles vs 13 MAC wait cycles. The advantage grows with the loop it replaces.</div>
-        </div>
-      </div>
+    <section id="sparsity">
+      <h2>When software wins: zero weights</h2>
+      <p>The accelerator executes one MAC for every coefficient, including zero. Software can branch around the multiplication. At N = 64 with all-zero weights, software takes <strong>588 cycles</strong> while the parallel version still takes <strong>778</strong>: software is 1.32× faster. The architecture did not change; the useful work did.</p>
+      <figure tabindex="0" class="research-figure" id="fig-sparsity">
+        <a href="assets/figures/03-sparsity.svg" aria-label="Open full-resolution sparsity crossover"><img src="assets/figures/03-sparsity.svg" width="1000" height="405" loading="lazy" alt="Measured software cost rises with realized nonzero weight density, while hardware cost stays flat. The low-density detail shows where zero-skipping software wins." /></a>
+        <figcaption><strong>Figure 3. Where a fixed-work accelerator loses.</strong> Nine requested densities × three seeds at N = 64. Points are CPU-RTL runs positioned at realized nonzero-weight density. Parallel cost comes from the same CPU simulation. Dashed curves are a separate analytical expectation for uniformly sampled nonzero bytes. They are not a regression fit or additional measurements. Panel (b) enlarges the low-density region; below a ratio of one, software wins. Coincident fixtures overlap.</figcaption>
+      </figure>
+      <p>The software count can be reconstructed exactly: <strong>C<sub>SW</sub> = 12 + 9N + 141K + 12P</strong>, where K is the number of nonzero weights and P is their total eight-bit population count, meaning the number of 1 bits across their byte representations. The 9N term pays the runtime zero test; nonzero coefficients enter the bit-decomposition path. For uniformly sampled nonzero bytes, the expected number of 1 bits per byte is 1024/255, about four. This gives an expected crossover near 1.6% density at N = 64. It is an analytical expectation, not a directly measured threshold; individual finite fixtures cross at different points.</p>
+      <p>This is not a general recommendation to process sparse networks in scalar software. A zero-aware accelerator, compressed representation, or block-sparse kernel would change the comparison. It is evidence that <strong>the speedup belongs to an architecture–program–input combination</strong>, not to the MAC instruction in isolation.</p>
     </section>
 
-    <section id="verification">
-      <h2>Verification as Architecture</h2>
+    <section id="boundaries">
+      <h2>Count input setup, too</h2>
+      <p>The cold interval adds the same input-writing program to each configuration. At N = 64 it adds 1,540 cycles: 1,536 for the 128 initialized words and four for reset settling. Software then takes a median 14,188 cycles and parallel hardware 2,318. The speedup becomes <strong>6.12×</strong>, not 16.26×.</p>
+      <figure tabindex="0" class="research-figure" id="fig-boundaries">
+        <a href="assets/figures/04-boundaries.svg" aria-label="Open full-resolution boundary and code-size comparison"><img src="assets/figures/04-boundaries.svg" width="1000" height="440" loading="lazy" alt="Kernel-only speedups are larger than speedups including input initialization. Unrolled software also requires many more instruction bytes than the hardware kernel." /></a>
+        <figcaption><strong>Figure 4. Execution time is not the only boundary.</strong> (a) Median uniform signed-byte software/parallel ratios for a vector and four actual matrix-vector shapes, with and without initialization. “Cold” is this synthetic boot path, not host transfer or a complete application. (b) Static kernel instruction bytes, excluding boot and untimed verification code; all three hardware variants share the instruction stream. The ideal instruction source is excluded from the core fits, so these bytes are not silently counted as fitted memory.</figcaption>
+      </figure>
+      <p>The instruction set (ISA) has direct-address loads and stores but no general indirect-addressing loop. The benchmark therefore unrolls its dimensions. At N = 64 the software kernel occupies 21,008 bytes and the hardware kernel 780 bytes. That difference is real; its instruction-memory latency, capacity, and energy consequences are not modeled. A larger demonstration cannot be justified by extrapolating this ideal instruction source indefinitely.</p>
+      <p>The matrix-vector cases repeat the row kernel and reuse the initialized input vector. They demonstrate correct multi-output execution, not an optimized general matrix-multiplication (GEMM) engine. There is no tiling, overlap, packed SIMD, or cross-row operand forwarding.</p>
+    </section>
 
-      <p>The most useful engineering lessons came from places where simulation, synthesis, and hardware readiness disagreed. Those failures improved the architecture rather than merely fixing the tests.</p>
+    <section id="physical">
+      <h2>Account for the FPGA resources, too</h2>
+      <p>All four configurations are fitted for the same Cyclone IV E EP4CE115F29C7, with the same 50 MHz constraint, a virtual-pin boundary that excludes physical I/O placement, internal 256 × 32-bit data RAM, and fitter seeds 1–3. The instruction source is external to this boundary. These are post-fit <strong>core estimates</strong>, not a placed board-level system with a program ROM and physical I/O.</p>
+      <figure tabindex="0" class="research-figure" id="fig-physical">
+        <a href="assets/figures/05-physical-cost.svg" aria-label="Open full-resolution FPGA resource and timing plot"><img src="assets/figures/05-physical-cost.svg" width="1000" height="430" loading="lazy" alt="Matched FPGA fits compare logic-element cost and slow-corner maximum-frequency estimates for four core configurations. Individual fitter seeds are visible." /></a>
+        <figcaption><strong>Figure 5. Matched resource and timing evidence.</strong> Quartus Prime Lite 25.1std, Cyclone IV E, three fitter seeds per configuration. Bars and horizontal marks show medians; points show individual fits, not confidence intervals. Fmax, the estimated maximum clock frequency, is the slow 1.2 V, 85 °C timing-model estimate; the dashed line marks the 50 MHz constraint. All variants contain 8,192 data-memory bits. Parallel additionally uses one embedded 9-bit multiplier element; the others use none. <a href="assets/data/synthesis-results.csv">Fit data</a>.</figcaption>
+      </figure>
+      <p>The median logic-element counts are 628 for software-only, 1,142 for staged iterative, 1,181 for fused iterative, and 1,067 for parallel. Parallel uses fewer general-purpose logic elements than the iterative versions but consumes a dedicated multiplier. It is therefore misleading to call it simply “smaller” without reporting both resources. Its slow-corner Fmax estimates span 52.93–57.15 MHz across these three fits, not a measured operating-frequency range on a board.</p>
+      <p>Logic elements are the FPGA’s configurable logic resources; the dedicated multiplier is a separate resource. Power, energy, board behavior, and sustained external-memory bandwidth remain unmeasured.</p>
+    </section>
 
-      <div class="bug-block">
-        <div class="bug-header">ALU simulation correctness</div>
-        <div class="bug-body">
-          <p>The first ADD tests returned zero because the ALU process read component outputs before the component had advanced by a VHDL delta cycle. The result signals from <code>adder32</code> were missing from the sensitivity list, so the waveform stayed stale. The final ALU process uses complete sensitivity and variable-based result handling so the simulator and intended combinational logic agree.</p>
-        </div>
-      </div>
+    <section id="numerics">
+      <h2>Correctness is a visible part of the result</h2>
+      <p>All 65,536 signed 8-bit operand pairs are checked on each NPU variant: <strong>196,608 exact product checks</strong>. The test changes live operand ports after command acceptance, and checks completion pulses, positive and negative accumulator saturation, and conversion behavior. A second sweep applies 2,049 accumulator inputs to both output modes on all three variants, adding 12,294 conversion checks.</p>
+      <figure tabindex="0" class="research-figure" id="fig-numerics">
+        <a href="assets/figures/06-numerics.svg" aria-label="Open full-resolution numerical behavior plot"><img src="assets/figures/06-numerics.svg" width="1000" height="390" loading="lazy" alt="Actual RTL outputs show signed and ReLU INT8 conversion. A zoom near zero reveals arithmetic right-shift rounding of negative values rather than truncation toward zero." /></a>
+        <figcaption><strong>Figure 6. What the output instruction actually computes.</strong> RTL-simulated NQUANT outputs for accumulator values −1,024 through 1,024, shift = 3, signed and ReLU modes. Parallel is drawn; all three variants are checked against the integer reference. The dashed line is unquantized division by eight, not hardware output. Panel (b) exposes the staircase near zero. <a href="assets/data/arithmetic-quantization.csv">Outputs</a> · <a href="assets/data/arithmetic-verification.log">Verification log</a>.</figcaption>
+      </figure>
+      <p>Exhaustive multiplication is not exhaustive processor verification. The accumulator has far more possible histories than this test explores. The existing 13-test regression suite supplies additional arithmetic, branch, CPU/NPU integration, and wrapper checks. None substitutes for formal proof, timing-aware gate-level simulation, or on-board validation.</p>
+    </section>
 
-      <div class="bug-block">
-        <div class="bug-header">Control defaults and latch avoidance</div>
-        <div class="bug-body">
-          <p>The control unit also needed explicit safe defaults. Without assigning every control output in every path, synthesis can infer storage that the architecture never intended. The final controller starts each combinational evaluation from known defaults, then overrides only the signals required by the current state and opcode.</p>
-        </div>
-      </div>
-
-      <div class="bug-block">
-        <div class="bug-header">Synchronous memory timing</div>
-        <div class="bug-body">
-          <p>The top-level integration exposed a timing detail that unit tests could hide: after a MAC completes, synchronous instruction memory needs a cycle for the next instruction word to be valid. The post-MAC bubble makes the fetch boundary explicit and keeps the hardware behavior aligned with the waveform model.</p>
-        </div>
-      </div>
-
-      <p>That is the deeper lesson of the project. A hardware accelerator is not only a datapath block. It is the contract between the ISA, the FSM, the memory timing, and the verification model. The MAC instruction became reliable only when all four agreed.</p>
+    <section id="discussion">
+      <h2>What this changes about the next hardware revision</h2>
+      <p>In the parallel kernel, most cycles already lie outside the NPU wait. The next useful experiment should reduce <strong>invocation or operand-delivery cost</strong>, and be evaluated against the same complete-kernel boundary.</p>
+      <div class="table-scroll"><table class="pattern-table">
+        <thead><tr><th>Next hypothesis</th><th>Concrete experiment</th><th>Evidence required before a claim</th></tr></thead>
+        <tbody>
+          <tr><td>Amortize instruction issue</td><td>A counted dot-product command with explicit operand addressing.</td><td>Cycle partition, code size, arbitration cost, and fitted state.</td></tr>
+          <tr><td>Exploit sparse weights</td><td>A zero-aware issue path or compressed-index kernel.</td><td>Density crossover including index decoding and data movement.</td></tr>
+          <tr><td>Supply more operands per instruction</td><td>Packed signed lanes or a small operand buffer.</td><td>Packing overhead, supported shapes, numerical contract, and resource cost.</td></tr>
+          <tr><td>Compare integration choices</td><td>A memory-mapped unit with the same datapath and arithmetic.</td><td>Matched invocation, transfer, completion, and output-store accounting.</td></tr>
+        </tbody>
+      </table></div>
+      <p>These are proposed extensions, not implemented results. <a href="#ref-snitch">Snitch</a>, <a href="#ref-xpulpnn">XpulpNN</a>, <a href="#ref-opengemm">OpenGeMM</a>, and <a href="#ref-snax">SNAX</a> provide precedents for asking those questions; importing their reported gains would not answer them on this processor.</p>
+      <p>The result points to a specific next step: reduce the work surrounding each MAC. In this core, accelerating dense arithmetic exposes instruction and operand-delivery costs that were previously hidden by software multiplication. A counted dot-product command is worth testing next, but it must earn its improvement with the same input, output, and resource accounting.</p>
     </section>
 
     <section id="evidence">
-      <h2>The Evidence</h2>
-
-      <p>Every headline number in the article comes from a concrete tool result: the simulation suite, the Quartus flow summary, or the TimeQuest timing report. The final full compile completed successfully in Quartus with Analysis and Synthesis, Fitter, Assembler, Timing Analysis, and EDA Netlist Writer all passing.</p>
-
+      <h2>Evidence you can inspect and reproduce</h2>
+      <p>The figures are generated from archived experiment records. Each run records input fixtures, firmware, output references, simulation logs, and source hashes. The package includes the exact RTL, measurement scripts, firmware, and raw reports used for this revision.</p>
       <div class="evidence-grid">
-        <div class="evidence-card">
-          <div class="ev-label">bench_tb.vhd simulation</div>
-          <div class="ev-val">
-            SW done cycle = 160<br>
-            SW result A = 2500<br>
-            HW done cycle = 184<br>
-            MAC_WAIT = 13<br>
-            HW result A = 2500
-          </div>
-        </div>
-        <div class="evidence-card">
-          <div class="ev-label">Expanded test suite</div>
-          <div class="ev-val">
-            multiplier_tb passed<br>
-            accumulator_tb passed<br>
-            relu_tb passed<br>
-            npu_core_tb passed<br>
-            cpu_mac_tb passed<br>
-            risc_npu_top_tb passed
-          </div>
-        </div>
-        <div class="evidence-card">
-          <div class="ev-label">Quartus resource report</div>
-          <div class="ev-val">
-            Top entity: risc_npu_top<br>
-            Logic elements: 11,322 / 114,480<br>
-            Registers: 8,447<br>
-            Memory bits: 2,048<br>
-            DSP blocks: 0 / 532<br>
-            Pins: 29 / 529
-          </div>
-        </div>
-        <div class="evidence-card">
-          <div class="ev-label">TimeQuest timing report</div>
-          <div class="ev-val">
-            Fmax: 54.61 MHz<br>
-            Worst setup slack: +0.865 ns<br>
-            Worst hold slack: +0.385 ns<br>
-            Setup and hold fully constrained<br>
-            SOF generated successfully
-          </div>
-        </div>
+        <div class="evidence-card"><div class="ev-label">Program measurements</div><div class="ev-val"><a href="assets/data/kernel-results.csv">592-run CSV</a><br><a href="assets/data/kernel-manifest.json">Input and source manifest</a><br>1,296 stored outputs verified</div></div>
+        <div class="evidence-card"><div class="ev-label">Numerical verification</div><div class="ev-val"><a href="assets/data/arithmetic-verification.log">Exhaustive test log</a><br><a href="assets/data/arithmetic-quantization.csv">Conversion sweep</a><br>196,608 product checks</div></div>
+        <div class="evidence-card"><div class="ev-label">FPGA implementation</div><div class="ev-val"><a href="assets/data/synthesis-results.csv">12 matched fits</a><br><a href="assets/data/synthesis-manifest.json">Fit and source manifest</a><br>Same device · same constraints</div></div>
+        <div class="evidence-card"><div class="ev-label">Reproduction package</div><div class="ev-val"><a href="assets/data/reproduction-article.zip">Source, fixtures, logs, reports</a><br><a href="assets/data/article-evidence-manifest.json">Package and figure hashes</a></div></div>
       </div>
-
-      <p>The result is deliberately modest and important for that reason. This is not a general-purpose neural processor yet. It is a complete, hardware-compiled proof that a custom ISA can absorb a neural primitive, route it through the CPU datapath, verify it cycle by cycle, and close timing on an FPGA.</p>
+      <details class="method-details"><summary>Reproduction sequence and interpretation notes</summary>
+        <p>The package README lists commands for GHDL and Quartus. Run the existing regression suite, then exhaustive arithmetic verification, then the CPU workload sweep. Fit all four cores with the listed seeds. Finally regenerate SVG/PNG figures from completed manifests. The plot pipeline rejects missing completion markers or mismatched result hashes.</p>
+        <p>The simulation clock period is 10 ns for convenient waveform timing; it does not assert that this FPGA runs at 100 MHz. Performance conclusions use cycles. Fitted timing is separate. The cold path is a controlled synthetic initializer, not deployment boot time. Three input seeds and three fitting seeds are descriptive samples, not evidence of statistical significance.</p>
+      </details>
     </section>
 
-    <hr class="sec-rule">
     <section id="references">
       <h2>References</h2>
-      <ul class="ref-list">
-        <li data-n="[1]">Mixed-precision Neural Networks on RISC-V: ISA Extensions for Multi-Pumped SIMD. Discusses ISA-level support for neural inference and mixed-precision MAC behavior.</li>
-        <li data-n="[2]">A SIMD MAC RISC-V Extension with Approximate Multipliers for CNN Inference. Demonstrates the performance effect of custom MAC-oriented RISC-V extensions.</li>
-        <li data-n="[3]">EXTREM-EDGE: Extensions to RISC-V for Energy-efficient ML at the IoT Edge. Motivates tightly coupled acceleration for edge inference workloads.</li>
-        <li data-n="[4]">ARM Cortex-M technical documentation. Provides context for embedded DSP and MAC-style instructions in microcontroller workloads.</li>
-        <li data-n="[5]">Intel Architecture Instruction Set Extensions, AVX-512 VNNI. Provides context for dot-product and fused MAC instructions in high-throughput inference.</li>
-      </ul>
+      <ol class="ref-list">
+        <li id="ref-mixed" data-n="1">G. Armeniakos, A. Maras, S. Xydis, and D. Soudris. <a href="https://doi.org/10.1145/3676536.3676840">Mixed-precision Neural Networks on RISC-V Cores: ISA extensions for Multi-Pumped Soft SIMD Operations</a>. ICCAD 2024. Original research reference; mechanism not reproduced here.</li>
+        <li id="ref-snitch" data-n="2">F. Zaruba, F. Schuiki, T. Hoefler, and L. Benini. <a href="https://doi.org/10.1109/TC.2020.3027900">Snitch: A tiny Pseudo Dual-Issue Processor for Area and Energy Efficient Execution of Floating-Point Intensive Workloads</a>. IEEE Transactions on Computers 70(11), 1845–1860, 2021.</li>
+        <li id="ref-opengemm" data-n="3">X. Yi et al. <a href="https://doi.org/10.1145/3658617.3697652">OpenGeMM: A Highly-Efficient GeMM Accelerator Generator with Lightweight RISC-V Control and Tight Memory Coupling</a>. ASP-DAC 2025.</li>
+        <li id="ref-bisdu" data-n="4">D. Metz, V. Kumar, and M. Själander. <a href="https://doi.org/10.1145/3608447">BISDU: A Bit-Serial Dot-Product Unit for Microcontrollers</a>. ACM Transactions on Embedded Computing Systems, 2023. <a href="https://www.sjalander.com/research/pdf/sjalander-tecs2023.pdf">Author manuscript</a>.</li>
+        <li id="ref-gemmini" data-n="5">H. Genc et al. <a href="https://doi.org/10.1109/DAC18074.2021.9586216">Gemmini: Enabling Systematic Deep-Learning Architecture Evaluation via Full-Stack Integration</a>. DAC 2021.</li>
+        <li id="ref-snax" data-n="6">R. A. Antonio et al. <a href="https://doi.org/10.1109/ISLPED65674.2025.11261784">An Open-Source HW-SW Co-Development Framework Enabling Efficient Multi-Accelerator Systems</a>. ISLPED 2025. SNAX.</li>
+        <li id="ref-marvin" data-n="7">G. Armeniakos, A. Maras, S. Xydis, and D. Soudris. <a href="https://doi.org/10.1109/TCAD.2025.3615505">MaRVIn: A Cross-Layer Mixed-Precision RISC-V Framework for DNN Inference From ISA Extension to Hardware Acceleration</a>. IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems 45(5), 2432–2445, 2026.</li>
+        <li id="ref-xpulpnn" data-n="8">A. Garofalo, G. Tagliavini, F. Conti, L. Benini, and D. Rossi. <a href="https://doi.org/10.1109/TETC.2021.3072337">XpulpNN: Enabling Energy Efficient and Flexible Inference of Quantized Neural Networks on RISC-V Based IoT End Nodes</a>. IEEE Transactions on Emerging Topics in Computing, 2021.</li>
+      </ol>
+      <p class="source-note">Experiment records: September 13, 2026. The plotted values come from this project; references describe related mechanisms and evaluation approaches, not interchangeable benchmark results.</p>
     </section>
-
   </article>
-
-  <footer>
-    <p>RISC-NPU | Custom 32-bit ISA + NPU on Altera Cyclone IV E | DE2-115 | Quartus Prime Lite 25.1</p>
-  </footer>
-
+  <footer>RISC-NPU · Jaundel Simon · Custom processor, scalar MAC extension, reproducible experiments.<br>Simulation data and reproduction files accompany the figures.</footer>
 </div>
-
-<script src="main.js"></script>
 </body>
 </html>

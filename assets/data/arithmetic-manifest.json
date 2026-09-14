@@ -1,0 +1,16 @@
+{
+  "status": "complete",
+  "product_checks": 196608,
+  "pairs": 65536,
+  "configurations": 3,
+  "quantization_checks": 12294,
+  "quantization_sha256": "e3848800abfd54dd24c13d48106b2cc9395624327474dbda7eaf56c898dd130f",
+  "sources": {
+    "multiplier.vhd": "43932a6c14d2aaab6803f754d034cd242dd30ac1eb5b4a733224acf0eddac4de",
+    "accumulator.vhd": "025d472adc74a8263aa56acc1b3a6ed2f14a5e2b6e77b6dcf188c437bec30673",
+    "relu.vhd": "274e03e343e07edbe341f50d1d3dd420031bda70d4c7f30547fa9c120fb1fcf8",
+    "npu_core.vhd": "5abf5a6feb915758ec4ba03a3ae89306cfc5b5aeb2a36fbb8baf68d0e1b05723",
+    "tb\\research_arithmetic_tb.vhd": "f11796a51fcfa29fd7159d17f1b05d1bd5be630f0c124e6ed8178769ce29c820"
+  },
+  "log_sha256": "f8a63a8fb020d27e01eb94b8a4f174c7f39afadbb1857b8ba0d12f3cf9e7499a"
+}

@@ -551,3 +551,63 @@ footer {
   .finding-grid { grid-template-columns: 1fr; }
   .pattern-table { font-size: 11px; }
 }
+
+/* Research revision: retain the original shell, typography and palette. */
+.hero-deck { max-width: 720px; font-family: var(--serif); font-size: 23px; line-height: 1.4; color: #555; }
+.meta-note { font-size: 11px; font-weight: 400; color: var(--muted); }
+.metric-hw { color: var(--hw); font-size: 18px; font-weight: 700; }
+.article-nav { display: flex; flex-wrap: wrap; gap: 10px 22px; max-width: 720px; padding: 0 0 18px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.research-note { max-width: 720px; border-left: 3px solid var(--sw); background: #f7f9fc; padding: 17px 21px; margin: 24px 0; font-size: 14px; line-height: 1.65; }
+.research-figure { width: 100%; margin: 32px 0 34px; padding-top: 18px; border-top: 1px solid var(--line); }
+.research-figure img { display: block; width: 100%; height: auto; background: white; }
+.research-figure figcaption { font-family: var(--sans); color: #555; font-size: 13px; line-height: 1.6; margin: 18px 0 0; max-width: 900px; }
+.research-figure figcaption strong { color: #222; }
+article .source-note { font-family: var(--sans); font-size: 13px; line-height: 1.65; color: #666; }
+.table-scroll { max-width: 960px; overflow-x: auto; margin: 24px 0; }
+.table-scroll table { width: 100%; margin: 0; }
+.code-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 22px 0; }
+.code-comparison h3 { margin-top: 0; line-height: 1.4; }
+.code-comparison pre { margin: 0; font-size: 12px; line-height: 1.7; overflow-x: auto; }
+.method-details { max-width: 720px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 16px 0; margin-top: 22px; }
+.method-details summary { cursor: pointer; color: var(--link); font-size: 14px; }
+.method-details p { font-family: var(--sans); font-size: 14px; margin-top: 16px; }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--sw); outline-offset: 4px; }
+section, figure, .ref-list li { scroll-margin-top: 24px; }
+@media (max-width: 720px) {
+  .hero-deck { font-size: 20px; }
+  .code-comparison { grid-template-columns: 1fr; }
+  .table-scroll table { min-width: 560px; }
+  .research-figure { overflow-x: auto; }
+  .research-figure img { min-width: 680px; }
+}
+@media print {
+  .page-wrap { width: 100%; padding: 0; }
+  .hero { padding-top: 0; }
+  .article-nav { display: none; }
+  .research-figure, .code-comparison, .evidence-card { break-inside: avoid; }
+  .research-figure img { min-width: 0; }
+  article p { max-width: none; font-size: 12pt; }
+  .research-figure figcaption { font-size: 9pt; }
+  a { color: inherit; }
+}
+
+/* Reading refinements within the established palette and type families. */
+.article-context { margin-top: 24px; font-size: 14px; line-height: 1.6; color: #555; }
+.code-comparison > div { min-width: 0; }
+.hero-tag { font-size: 13px; letter-spacing: 0; text-transform: none; color: #555; }
+h3 { font-size: 15px; letter-spacing: 0; text-transform: none; color: #444; }
+.article-nav { font-size: 14px; }
+.abstract-box p { font-size: 17px; }
+.research-figure figcaption, .ref-list li { font-size: 14px; }
+.table-scroll th { font-size: 13px; text-transform: none; letter-spacing: 0; }
+.table-scroll td { font-size: 14px; line-height: 1.6; }
+.ev-label { font-size: 12px; text-transform: none; letter-spacing: 0; color: #555; }
+.ev-val { font-family: var(--sans); font-size: 14px; }
+.research-figure:focus-visible { outline: 2px solid var(--sw); outline-offset: 4px; }
+@media (max-width: 720px) {
+  .hero { padding: 16px 0 24px; margin-bottom: 24px; }
+  h1 { line-height: 1.1; }
+  .article-context { font-size: 13px; }
+  .abstract-box { padding: 16px 18px; }
+  .research-figure::before { content: 'Scroll across the figure, or select it to open the full version.'; display: block; font: 12px/1.5 var(--sans); color: #555; margin-bottom: 12px; }
+}

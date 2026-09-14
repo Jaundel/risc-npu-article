@@ -1,0 +1,6 @@
+C:\Users\jaund\Downloads\RISC-NPU\tb\research_arithmetic_tb.vhd:95:13:@10609196ns:(report note): LATENCY config=1 min=12 max=12
+C:\Users\jaund\Downloads\RISC-NPU\tb\research_arithmetic_tb.vhd:95:13:@10609196ns:(report note): LATENCY config=2 min=10 max=10
+C:\Users\jaund\Downloads\RISC-NPU\tb\research_arithmetic_tb.vhd:95:13:@10609196ns:(report note): LATENCY config=3 min=2 max=2
+C:\Users\jaund\Downloads\RISC-NPU\tb\research_arithmetic_tb.vhd:97:9:@10609196ns:(report note): EXHAUSTIVE_PASS pairs=65536 configurations=3 product_checks=196608 operand_capture=pass saturation=pass quantization=pass
+C:\Users\jaund\Downloads\RISC-NPU\tb\research_arithmetic_tb.vhd:98:9:@10609196ns:(report note): QUANTIZATION_SWEEP_PASS inputs=2049 modes=2 configurations=3 checks=12294
+simulation stopped @10609196ns

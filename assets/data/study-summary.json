@@ -1,0 +1,239 @@
+{
+  "kernel_cases": 592,
+  "verified_kernel_outputs": 1296,
+  "run_id": "20260913T231450Z",
+  "verification_id": "20260913T231701Z",
+  "n64": [
+    {
+      "case": "n64_m1_full_s1729_software",
+      "n": 64,
+      "m": 1,
+      "family": "full",
+      "seed": 1729,
+      "configuration": "software",
+      "macs": 64,
+      "weight_density": 1.0,
+      "kernel_words": 5252,
+      "kernel_sha256": "6f573cce9b1f21d77cbd804364747b3a47228efc8f6e5775787b80da464d6ff3",
+      "input_words": 128,
+      "cycles": 12528,
+      "cold": 14068,
+      "fetch": 4176,
+      "memory": 4664,
+      "wait": 0,
+      "setup": 0,
+      "scalar": 3688,
+      "retired": 4176,
+      "outputs": 1
+    },
+    {
+      "case": "n64_m1_full_s1729_iterative_staged",
+      "n": 64,
+      "m": 1,
+      "family": "full",
+      "seed": 1729,
+      "configuration": "iterative_staged",
+      "macs": 64,
+      "weight_density": 1.0,
+      "kernel_words": 195,
+      "kernel_sha256": "30986fdf265f73afc774fc0eb606de4b949e170ff3852f6d9a485a6dfe120680",
+      "input_words": 128,
+      "cycles": 1418,
+      "cold": 2958,
+      "fetch": 195,
+      "memory": 258,
+      "wait": 832,
+      "setup": 3,
+      "scalar": 130,
+      "retired": 195,
+      "outputs": 1
+    },
+    {
+      "case": "n64_m1_full_s1729_iterative_fused",
+      "n": 64,
+      "m": 1,
+      "family": "full",
+      "seed": 1729,
+      "configuration": "iterative_fused",
+      "macs": 64,
+      "weight_density": 1.0,
+      "kernel_words": 195,
+      "kernel_sha256": "30986fdf265f73afc774fc0eb606de4b949e170ff3852f6d9a485a6dfe120680",
+      "input_words": 128,
+      "cycles": 1290,
+      "cold": 2830,
+      "fetch": 195,
+      "memory": 258,
+      "wait": 704,
+      "setup": 3,
+      "scalar": 130,
+      "retired": 195,
+      "outputs": 1
+    },
+    {
+      "case": "n64_m1_full_s1729_parallel_fused",
+      "n": 64,
+      "m": 1,
+      "family": "full",
+      "seed": 1729,
+      "configuration": "parallel_fused",
+      "macs": 64,
+      "weight_density": 1.0,
+      "kernel_words": 195,
+      "kernel_sha256": "30986fdf265f73afc774fc0eb606de4b949e170ff3852f6d9a485a6dfe120680",
+      "input_words": 128,
+      "cycles": 778,
+      "cold": 2318,
+      "fetch": 195,
+      "memory": 258,
+      "wait": 192,
+      "setup": 3,
+      "scalar": 130,
+      "retired": 195,
+      "outputs": 1
+    }
+  ],
+  "shapes": [
+    {
+      "n": 64,
+      "m": 1,
+      "warm_speedup": 16.25706940874036,
+      "cold_speedup": 6.120793787748059
+    },
+    {
+      "n": 8,
+      "m": 4,
+      "warm_speedup": 14.858490566037736,
+      "cold_speedup": 7.47136563876652
+    },
+    {
+      "n": 16,
+      "m": 4,
+      "warm_speedup": 15.727722772277227,
+      "cold_speedup": 7.715575620767495
+    },
+    {
+      "n": 16,
+      "m": 8,
+      "warm_speedup": 15.69059405940594,
+      "cold_speedup": 8.090800477897252
+    },
+    {
+      "n": 32,
+      "m": 4,
+      "warm_speedup": 15.959390862944163,
+      "cold_speedup": 7.736
+    }
+  ],
+  "fits": [
+    {
+      "configuration": "software",
+      "seed": 1,
+      "logic_elements": 627,
+      "registers": 132,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 54.76
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 1,
+      "logic_elements": 1142,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 57.36
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 1,
+      "logic_elements": 1181,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 56.8
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 1,
+      "logic_elements": 1067,
+      "registers": 239,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 1,
+      "fmax_mhz_slow85": 56.63
+    },
+    {
+      "configuration": "software",
+      "seed": 2,
+      "logic_elements": 628,
+      "registers": 132,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 54.91
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 2,
+      "logic_elements": 1142,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 57.71
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 2,
+      "logic_elements": 1182,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 54.93
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 2,
+      "logic_elements": 1070,
+      "registers": 239,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 1,
+      "fmax_mhz_slow85": 57.15
+    },
+    {
+      "configuration": "software",
+      "seed": 3,
+      "logic_elements": 628,
+      "registers": 132,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 55.21
+    },
+    {
+      "configuration": "iterative_staged",
+      "seed": 3,
+      "logic_elements": 1147,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 56.29
+    },
+    {
+      "configuration": "iterative_fused",
+      "seed": 3,
+      "logic_elements": 1179,
+      "registers": 301,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 0,
+      "fmax_mhz_slow85": 56.48
+    },
+    {
+      "configuration": "parallel_fused",
+      "seed": 3,
+      "logic_elements": 1065,
+      "registers": 239,
+      "memory_bits": 8192,
+      "embedded_multiplier_9bit": 1,
+      "fmax_mhz_slow85": 52.93
+    }
+  ],
+  "synthesis_id": "20260913T231206Z"
+}

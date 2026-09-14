@@ -1,0 +1,37 @@
+{
+  "status": "pass",
+  "kernel_runs": 592,
+  "verified_outputs": 1296,
+  "fit_runs": 12,
+  "minimum_reported_slack_ns": 0.18,
+  "checks": [
+    "source hashes",
+    "raw artifact hashes",
+    "matched fixtures",
+    "kernel invariance",
+    "RAM readback",
+    "independent outputs",
+    "exact cycle identities",
+    "cycle partition",
+    "quantization reference",
+    "timing summaries"
+  ],
+  "regression_tests": 13,
+  "created_utc": "2026-09-14T01:40:55.704638+00:00",
+  "figure_generator_sha256": "bddcf2de6abe0026d83c93ac4b547038d74c9db8ec5929220ded2374d7aa0862",
+  "archive_sha256": "d79d0e2d26ff04a35ae38cc146f31da48c1e89edcb5bbae2c54260e393ed69d6",
+  "figures": {
+    "01-scaling.svg": "aaebb5d370c99cd12f6315eef21c0ea979014d65a0f50fae74ad59d1a744f996",
+    "02-cycle-budget.svg": "1aeb89f8ddbb012d2cca445ed0334ae2f520d6ed360bbe05bcee81ac03670d3b",
+    "03-sparsity.svg": "506f4219ee258962581073d1383c3acadae0aed6e635f1b05e00102ecc410af0",
+    "04-boundaries.svg": "f393ecfcd6d4b819a72b8012d4bca6846d904ddfe447862f2fa5fc9e48bb473a",
+    "05-physical-cost.svg": "0ce07c7be0033fe9044ddbe56c8fa326b2a69428f3ce730315d36f3e3efd8307",
+    "06-numerics.svg": "0e8d27431f75d78f0172c08811d8f0d830eb92193588e4639758d35fdf2be344"
+  },
+  "kernel_run": "20260913T231450Z",
+  "arithmetic_run": "20260913T231701Z",
+  "synthesis_run": "20260913T231206Z",
+  "original_archive_sha256": "6cbc227db8f36d9318f9ed14affcbb57d277deb4e0852fb556c3ac3d3d4136de",
+  "archive_file": "reproduction-article.zip",
+  "packaging_note": "Editorial notes omitted and reproduction documentation refreshed. Experiment sources and records unchanged."
+}

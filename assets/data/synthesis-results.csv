@@ -1,0 +1,13 @@
+configuration,seed,logic_elements,registers,memory_bits,embedded_multiplier_9bit,fmax_mhz_slow85
+software,1,627,132,8192,0,54.76
+iterative_staged,1,1142,301,8192,0,57.36
+iterative_fused,1,1181,301,8192,0,56.8
+parallel_fused,1,1067,239,8192,1,56.63
+software,2,628,132,8192,0,54.91
+iterative_staged,2,1142,301,8192,0,57.71
+iterative_fused,2,1182,301,8192,0,54.93
+parallel_fused,2,1070,239,8192,1,57.15
+software,3,628,132,8192,0,55.21
+iterative_staged,3,1147,301,8192,0,56.29
+iterative_fused,3,1179,301,8192,0,56.48
+parallel_fused,3,1065,239,8192,1,52.93

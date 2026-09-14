@@ -1,0 +1,21 @@
+dist/
+node_modules/
+.DS_Store
+
+# Local authoring configuration and browser review output
+AGENTS.md
+CLAUDE.md
+.codex/
+.claude/
+.openai/
+.sites-runtime/
+.playwright-cli/
+research/architecture-paper-study.md
+
+# Retired prototype and original packaging copies retained locally
+main.js
+assets/data/reproduction.zip
+assets/data/publication-manifest.json
+.env
+.env.*
+!.env.example
